@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>SIPL — SPN Polda Papua Barat</title>
+  <meta name="description" content="Sistem Informasi Pendidikan dan Latihan SPN Polda Papua Barat — jadwal pelajaran, data peserta didik, dan penilaian.">
+  <meta name="theme-color" content="#5C1414">
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%235C1414'/%3E%3Cpath d='M32 12l16 6v11c0 10-6.8 17.7-16 20.5C22.8 46.7 16 39 16 29V18l16-6z' fill='%23C8981E'/%3E%3Cpath d='M32 22l2.6 5.3 5.8.8-4.2 4.1 1 5.8L32 35.3 26.8 38l1-5.8-4.2-4.1 5.8-.8z' fill='%235C1414'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://script.google.com">
+  <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/config.js" defer></script>
+  <script src="js/icons.js" defer></script>
+  <script src="js/core.js" defer></script>
+  <script src="js/ui.js" defer></script>
+  <script src="js/pages.js" defer></script>
+  <script src="js/app.js" defer></script>
+</head>
+<body>
+
+  <!-- Layar awal (hanya beberapa milidetik selama skrip dimuat) -->
+  <div id="boot" class="boot" aria-label="Memuat SIPL">
+    <div class="mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.3-7.5 9.5-4.3-1.2-7.5-4.9-7.5-9.5V6L12 3z"/><path d="M12 8.2l1.2 2.4 2.6.4-1.9 1.8.5 2.6-2.4-1.3-2.4 1.3.5-2.6-1.9-1.8 2.6-.4z"/></svg>
+    </div>
+  </div>
+
+  <!-- ===================== HALAMAN LOGIN ===================== -->
+  <div id="login" class="login" hidden>
+    <div class="login-bar">
+      <div class="emblem" data-ico="shield-star"></div>
+      <div>
+        <div class="t1">SPN Polda Papua Barat</div>
+        <div class="t2">Sistem Informasi Pendidikan dan Latihan</div>
+      </div>
+      <div class="motto">PRESISI • DISIPLIN • AKUNTABEL</div>
+    </div>
+
+    <main class="login-main">
+      <div class="login-card">
+        <div class="login-logo">
+          <div class="inner" id="login-logo"></div>
+          <div class="seal" data-ico="check"></div>
+        </div>
+        <div class="login-head">
+          <div class="kicker">Portal Internal Resmi</div>
+          <h1 id="login-title">SIPL — SPN POLDA PAPUA BARAT</h1>
+          <p>Sistem Informasi Pendidikan dan Latihan</p>
+        </div>
+
+        <form id="login-form" class="login-form" novalidate autocomplete="on">
+          <div class="alert gold">
+            <span data-ico="lock"></span>
+            <div><b>Sistem internal terbatas</b> — khusus Admin Satdik, Gadik, dan Pengasuh SPN Polda Papua Barat.</div>
+          </div>
+          <div id="login-error" class="alert red" role="alert" hidden></div>
+
+          <div class="field">
+            <label for="lg-user">Username <span class="req">*</span><span class="tag">ID Personel</span></label>
+            <div class="input-wrap">
+              <span class="lead" data-ico="user"></span>
+              <input id="lg-user" name="username" class="input with-lead" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Masukkan username" required>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="lg-pass">Password <span class="req">*</span><span class="tag">Kredensial</span></label>
+            <div class="input-wrap">
+              <span class="lead" data-ico="lock"></span>
+              <input id="lg-pass" name="password" class="input with-lead" type="password" autocomplete="current-password" placeholder="Masukkan password" required>
+              <button type="button" class="btn icon trail" id="lg-eye" aria-label="Tampilkan password" data-ico="eye"></button>
+            </div>
+          </div>
+
+          <div class="login-meta"><span>Lupa password? Hubungi Admin Satdik.</span></div>
+
+          <button type="submit" class="btn primary lg block" id="lg-submit">
+            <span>Masuk ke Aplikasi</span><span data-ico="arrow-right"></span>
+          </button>
+
+          <div class="login-note">
+            <span data-ico="shield"></span>
+            <span>Akun dibuat dan dikelola oleh Admin Satdik. Setelah 5 kali gagal berturut-turut, akun dikunci otomatis selama 15 menit.</span>
+          </div>
+          <div id="login-config" class="alert red" hidden></div>
+        </form>
+      </div>
+    </main>
+    <footer class="login-foot">
+      <b>SPN POLDA PAPUA BARAT</b>
+      Sekolah Polisi Negara • Polda Papua Barat © <span id="login-year">2026</span>
+    </footer>
+  </div>
+
+  <!-- ===================== APLIKASI (setelah login) ===================== -->
+  <div id="shell" class="shell" hidden>
+    <aside id="sidebar" class="sidebar" aria-label="Navigasi utama">
+      <div class="brand">
+        <div class="brand-logo" id="brand-logo"></div>
+        <div>
+          <div class="brand-name">SIPL</div>
+          <div class="brand-sub">SPN Polda Papua Barat</div>
+        </div>
+      </div>
+      <nav class="nav" id="nav"></nav>
+      <div class="side-foot">
+        <div class="avatar" id="side-avatar">--</div>
+        <div class="who"><b id="side-name">—</b><span id="side-sub">—</span></div>
+        <button class="btn icon" id="btn-logout" title="Keluar" aria-label="Keluar" data-ico="logout"></button>
+      </div>
+    </aside>
+    <div class="scrim" id="scrim"></div>
+
+    <div class="main">
+      <header class="topbar">
+        <button class="btn icon menu-btn" id="btn-menu" aria-label="Buka menu" data-ico="menu"></button>
+        <div class="crumb"><span data-ico="home" class="hide-sm"></span><span class="hide-sm">SIPL</span><span class="sep hide-sm">/</span><b id="crumb-title">Dashboard</b></div>
+        <div class="top-right">
+          <span class="net" id="net-status"><span data-ico="wifi-off"></span>Offline</span>
+          <div class="me">
+            <div class="who"><b id="top-name">—</b><small id="top-sub"></small></div>
+            <div class="avatar" id="top-avatar">--</div>
+          </div>
+        </div>
+      </header>
+      <main id="view" class="content" tabindex="-1"></main>
+    </div>
+  </div>
+
+  <div id="modal-root"></div>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+</body>
+</html>
