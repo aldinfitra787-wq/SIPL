@@ -38,20 +38,6 @@ Bus.on('boot', () => {
   if (c && !c.el.hidden && c.def.onBoot) c.def.onBoot(c.el, c.param);
 });
 
-const AKSI_LABEL = {
-  LOGIN: 'Masuk', LOGIN_DIKUNCI: 'Login dikunci', INPUT_NILAI: 'Input nilai', INPUT_NILAI_MENTAL: 'Nilai mental',
-  TAMBAH_PESERTA: 'Tambah peserta', UBAH_PESERTA: 'Ubah peserta', HAPUS_PESERTA: 'Hapus peserta',
-  TAMBAH_AKUN: 'Tambah akun', UBAH_AKUN: 'Ubah akun', HAPUS_AKUN: 'Hapus akun', RESET_PASSWORD: 'Reset password',
-  AKTIFKAN_AKUN: 'Aktifkan akun', NONAKTIFKAN_AKUN: 'Nonaktifkan akun', GANTI_PASSWORD: 'Ganti password',
-  TAMBAH_MASTER: 'Tambah master', UBAH_MASTER: 'Ubah master', HAPUS_MASTER: 'Hapus master',
-  TAMBAH_PENUGASAN: 'Tambah penugasan', HAPUS_PENUGASAN: 'Hapus penugasan', JADWAL_BENTROK_DISIMPAN: 'Jadwal bentrok',
-  UBAH_LOGO: 'Ubah logo', IMPORT_DATA: 'Import data', LAMBAT: 'Respons lambat'
-};
-function aksiChip(a) {
-  const red = /HAPUS|DIKUNCI|BENTROK|NONAKTIF|LAMBAT/.test(a);
-  return '<span class="chip' + (red ? ' red' : '') + '">' + esc(AKSI_LABEL[a] || a) + '</span>';
-}
-
 // ==========================================================================
 // AutoSaver — simpan otomatis (optimistic, draf tahan muat ulang)
 // ==========================================================================
@@ -129,6 +115,36 @@ function saveBadge(state, at, errMsg) {
 }
 
 // ==========================================================================
+// Status sesi penilaian harian (dipakai Dashboard, Input Nilai, Rekap)
+// ==========================================================================
+function pesertaCount(idKelas) { return S.boot.peserta.filter(p => p.ID_Kelas === idKelas).length; }
+function sesiBadge(info, total) {
+  if (!info) return '<span class="badge empty">Belum diisi</span>';
+  if (info.Status === 'Selesai') return '<span class="badge ok">Masuk rekap</span>';
+  return '<span class="badge draft">Draf' + (total ? ' · ' + (info.Jumlah || 0) + '/' + total : '') + '</span>';
+}
+/** Status sesi hari ini dari bootstrap (kosong bila bootstrap dari hari lain). */
+function todaySesiStat() {
+  const st = S.boot && S.boot.stat;
+  return st && st.sesiHariIni && S.boot.today === todayStr() ? st.sesiHariIni : {};
+}
+/** Perbarui ringkasan status sesi di bootstrap setelah simpan / selesai / buka kunci. */
+function sesiStatUpdate(info) {
+  const st = S.boot && S.boot.stat;
+  if (!st || !info || !st.sesiHariIni) return;
+  const slim = { ID_Sesi: info.ID_Sesi, Tanggal: info.Tanggal, ID_Jadwal: info.ID_Jadwal, ID_Kelas: info.ID_Kelas, ID_Mapel: info.ID_Mapel, ID_Gadik: info.ID_Gadik, Status: info.Status, Jumlah: info.Jumlah };
+  if (info.Tanggal === S.boot.today) st.sesiHariIni[info.ID_Jadwal] = slim;
+  const same = x => x.Tanggal === info.Tanggal && x.ID_Jadwal === info.ID_Jadwal;
+  const before = (st.sesiDraf || []).length, list = (st.sesiDraf || []).filter(x => !same(x));
+  if (info.Status !== 'Selesai') list.push(slim);
+  list.sort((a, b) => b.Tanggal.localeCompare(a.Tanggal));
+  st.sesiDrafTotal = Math.max(list.length, (st.sesiDrafTotal || 0) + list.length - before);
+  st.sesiDraf = list.slice(0, 30);
+  cachePut('boot', S.boot);
+}
+function nilaiHref(tgl, jid) { return '#/nilai/' + tgl + (jid ? '/' + encodeURIComponent(jid) : ''); }
+
+// ==========================================================================
 // DASHBOARD (US-03, US-04)
 // ==========================================================================
 page('dashboard', {
@@ -147,44 +163,46 @@ function shortcut(href, ic, title, text, go, tone) {
   return '<a class="shortcut ' + (tone || '') + '" href="#/' + href + '"><div class="icon-tile' + (tone === 'red' ? ' red' : '') + '">' + icon(ic) + '</div><h3>' + esc(title) + '</h3><p>' + esc(text) + '</p><span class="go">' + esc(go || 'Buka modul') + icon('arrow-right', 'sm') + '</span></a>';
 }
 
-function logsTable(logs) {
-  if (!logs || !logs.length) return emptyState('activity', 'Belum ada aktivitas', 'Aktivitas perubahan data akan tercatat di sini.');
-  return '<div class="table-wrap"><table class="dt cards"><thead><tr><th>Waktu</th><th>Pengguna</th><th>Peran</th><th>Aksi</th><th>Detail</th></tr></thead><tbody>' +
-    logs.map(l => '<tr><td data-label="Waktu" class="mono nowrap">' + esc(fmt.ago(l.Waktu)) + '</td>' +
-      '<td data-label="Pengguna" class="card-title"><div class="t-name"><b>' + esc(l.Nama) + '</b></div></td>' +
-      '<td data-label="Peran">' + (l.Role ? roleBadge(l.Role) : '<span class="faint">—</span>') + '</td>' +
-      '<td data-label="Aksi">' + aksiChip(l.Aksi) + '</td>' +
-      '<td data-label="Detail" class="wide">' + esc(l.Detail || '—') + '</td></tr>').join('') +
-    '</tbody></table></div>';
-}
-
 function dashAdmin(el) {
   const b = S.boot, st = b.stat || {}, conf = findConflicts(b.jadwal);
   const nConf = Math.round(Object.keys(conf).reduce((s, k) => s + conf[k].length, 0) / 2);
+  const ss = todaySesiStat(), today = todaySessions(b.jadwal);
+  const nDone = today.filter(j => ss[j.ID_Jadwal] && ss[j.ID_Jadwal].Status === 'Selesai').length;
+  const draf = st.sesiDrafTotal || 0;
   el.innerHTML =
     pageHead({
-      eyebrow: 'TA ' + (CFG.TAHUN_AJARAN || new Date().getFullYear()) + ' // Diktuk Bintara & Dikbangspes',
+      eyebrow: (CFG.TAHUN_AJARAN ? 'TA ' + CFG.TAHUN_AJARAN + ' // ' : '') + 'Sistem Informasi Pelatihan',
       title: 'Dashboard Administrator',
-      desc: 'Pusat kendali data akademik, jadwal pelajaran, personel pendidik dan pengasuh, serta rekap penilaian ' + esc(CFG.INSTANSI || 'SPN Polda Papua Barat') + '.',
+      desc: 'Pusat kendali data pelatihan, jadwal pelajaran, personel Gadik dan Pengasuh, serta rekap penilaian ' + esc(CFG.INSTANSI || 'SPN Polda Papua Barat') + '.',
       chips: roleBadge('Admin'),
       actions: '<a class="btn outline" href="#/jadwal">' + icon('calendar') + 'Atur Jadwal</a><a class="btn primary" href="#/akun/baru">' + icon('user-plus') + 'Tambah Akun</a>'
     }) +
     '<div class="grid c4 keep2">' +
-      stat({ label: 'Kelas Aktif', value: st.kelasAktif || 0, unit: 'kelas', icon: 'building', cap: (st.kelasTotal || 0) + ' angkatan/kelas terdaftar' }) +
+      stat({ label: 'Kelas Aktif', value: st.kelasAktif || 0, unit: 'kelas', icon: 'building', cap: (st.kelasTotal || 0) + ' angkatan/kelas pelatihan terdaftar' }) +
       stat({ label: 'Gadik', value: st.gadik || 0, unit: 'personel', icon: 'book', cap: 'Tenaga pendidik aktif' }) +
-      stat({ label: 'Pengasuh', value: st.pengasuh || 0, unit: 'personel', icon: 'shield', cap: 'Pengasuh peserta didik aktif' }) +
-      stat({ label: 'Peserta Didik', value: st.peserta || 0, unit: 'siswa', icon: 'users', cap: 'Diktuk Bintara & Dikbangspes' }) +
+      stat({ label: 'Pengasuh', value: st.pengasuh || 0, unit: 'personel', icon: 'shield', cap: 'Pengasuh peserta aktif' }) +
+      stat({ label: 'Peserta Pelatihan', value: st.peserta || 0, unit: 'orang', icon: 'users', cap: 'Terdaftar di seluruh kelas' }) +
     '</div>' +
     (nConf ? '<div class="notice red mt-24"><div class="icon-tile">' + icon('alert-triangle') + '</div><div class="grow"><b>' + nConf + ' bentrok jadwal terdeteksi</b><p>Ada Gadik atau kelas yang dijadwalkan pada jam yang sama. Selesaikan agar jadwal valid.</p></div><a class="btn danger sm" href="#/jadwal">Tinjau jadwal</a></div>' : '') +
+    '<div class="card mt-24"><div class="card-head"><div class="icon-tile">' + icon('clipboard-check') + '</div><div class="grow"><h3>Nilai Harian Hari Ini</h3><div class="sub">' + esc(fmt.tgl(todayStr(), { hari: true })) + ' • nilai masuk rekap setelah Gadik menekan “Selesai”</div></div>' +
+      (today.length ? '<span class="chip' + (nDone === today.length ? '' : ' line') + '">' + nDone + '/' + today.length + ' sesi masuk rekap</span>' : '') +
+      (draf ? '<a class="chip red" href="#/rekap">' + draf + ' sesi draf (semua tanggal)</a>' : '') + '</div>' +
+      (today.length ? '<div class="table-wrap"><table class="dt cards"><thead><tr><th>Jam</th><th>Mata Pelajaran</th><th>Kelas</th><th>Gadik</th><th>Status Nilai</th></tr></thead><tbody>' +
+        today.slice(0, 12).map(j => '<tr><td data-label="Jam" class="mono nowrap">' + esc(fmt.jam(j.Jam_Mulai)) + '–' + esc(fmt.jam(j.Jam_Selesai)) + '</td>' +
+          '<td data-label="Mapel" class="card-title"><b>' + esc(mapelName(j.ID_Mapel)) + '</b></td>' +
+          '<td data-label="Kelas">' + esc(kelasName(j.ID_Kelas)) + '</td>' +
+          '<td data-label="Gadik">' + esc(gadikName(j.ID_Gadik)) + '</td>' +
+          '<td data-label="Status">' + sesiBadge(ss[j.ID_Jadwal], pesertaCount(j.ID_Kelas)) + '</td></tr>').join('') +
+        '</tbody></table></div>' + (today.length > 12 ? '<div class="pager"><span>dan ' + (today.length - 12) + ' sesi lainnya</span></div>' : '')
+        : '<div class="card-body">' + emptyState('calendar', 'Tidak ada sesi pelajaran hari ini', 'Belum ada jadwal pada hari ' + nowWIT().hari + '.') + '</div>') +
+    '</div>' +
     '<div class="section-title"><h2>Menu Pintas</h2><span class="label-mono">Administrator</span></div>' +
     '<div class="grid c4">' +
       shortcut('personel', 'id-card', 'Personel & Akun', 'Kelola akun login Gadik dan Pengasuh, reset password, dan penugasan kelas/peleton.') +
       shortcut('jadwal', 'calendar', 'Jadwal Pelajaran', 'Matriks jadwal mingguan per kelas dengan deteksi bentrok Gadik dan kelas otomatis.') +
-      shortcut('rekap', 'table', 'Rekap Nilai', 'Rekapitulasi nilai mata pelajaran dan nilai mental kepribadian per kelas.') +
-      shortcut('master', 'database', 'Master Data', 'Angkatan & kelas, peleton, mata pelajaran, dan matriks penugasan personel.') +
-    '</div>' +
-    '<div class="card mt-24"><div class="card-head"><div class="icon-tile">' + icon('activity') + '</div><div class="grow"><h3>Aktivitas Terbaru</h3><div class="sub">Jejak perubahan data penting (nilai, akun, jadwal)</div></div><a class="btn outline sm" href="#/log">Lihat semua' + icon('arrow-right', 'sm') + '</a></div>' +
-      logsTable(st.logs) + '</div>';
+      shortcut('rekap', 'table', 'Rekap Nilai', 'Rata-rata nilai harian per mapel, rincian per tanggal, status sesi, dan nilai mental.') +
+      shortcut('master', 'database', 'Master Data', 'Angkatan & kelas pelatihan, peleton, mata pelajaran, dan penugasan personel.') +
+    '</div>';
 }
 
 function todaySessions(jadwal) {
@@ -203,50 +221,58 @@ function sessionBadge(state) {
   if (state === 'next') return '<span class="badge empty">Akan datang</span>';
   return '';
 }
-function sessionCard(j, i, showKelas) {
+function sessionCard(j, i, showKelas, side) {
   const now = nowWIT(), stt = sessionState(j, now);
-  return '<div class="session ' + (stt === 'now' ? 'now' : stt === 'done' ? 'done' : '') + '"><div class="no"><small>SESI</small><b>' + pad2(i + 1) + '</b></div>' +
+  return '<div class="session ' + (stt === 'now' ? 'now' : stt === 'done' && !side ? 'done' : '') + '"><div class="no"><small>SESI</small><b>' + pad2(i + 1) + '</b></div>' +
     '<div class="grow"><div class="row" style="gap:8px"><span class="time">' + esc(fmt.jam(j.Jam_Mulai)) + '–' + esc(fmt.jam(j.Jam_Selesai)) + ' WIT</span>' + (showKelas ? '<span class="chip">' + esc(kelasName(j.ID_Kelas)) + '</span>' : '') + sessionBadge(stt) + '</div>' +
     '<h3 class="mt-8">' + esc(mapelName(j.ID_Mapel)) + '</h3>' +
-    '<div class="meta"><span>' + icon('user', 'sm') + esc(gadikName(j.ID_Gadik)) + '</span>' + (j.Ruang ? '<span>' + icon('map-pin', 'sm') + esc(j.Ruang) + '</span>' : '') + '</div></div></div>';
+    '<div class="meta"><span>' + icon('user', 'sm') + esc(gadikName(j.ID_Gadik)) + '</span>' + (j.Ruang ? '<span>' + icon('map-pin', 'sm') + esc(j.Ruang) + '</span>' : '') + '</div></div>' +
+    (side ? '<div class="sess-act">' + side + '</div>' : '') + '</div>';
 }
 
 function dashGadik(el) {
-  const b = S.boot, me = S.me, kelas = kelasList(), now = nowWIT();
-  const taught = {};
-  b.jadwal.filter(j => j.ID_Gadik === me.ID_Gadik).forEach(j => { taught[j.ID_Kelas + '|' + j.ID_Mapel] = 1; });
-  const nilaiStat = (b.stat && b.stat.nilai) || {};
-  const cnt = k => b.peserta.filter(p => p.ID_Kelas === k).length;
-  const prog = Object.keys(taught).map(key => {
-    const [k, m] = key.split('|'), total = cnt(k), done = (nilaiStat[k] && nilaiStat[k][m]) || 0;
-    return { k, m, total, done, pct: total ? Math.round(done / total * 100) : 0 };
-  });
-  const today = todaySessions(b.jadwal);
+  const b = S.boot, me = S.me, kelas = kelasList(), now = nowWIT(), tgl = todayStr();
+  const mine = b.jadwal.filter(j => j.ID_Gadik === me.ID_Gadik);
+  const mapelIds = Array.from(new Set(mine.map(j => j.ID_Mapel))).sort((x, y) => collator.compare(mapelName(x), mapelName(y)));
+  const today = todaySessions(mine), ss = todaySesiStat();
+  const nDone = today.filter(j => ss[j.ID_Jadwal] && ss[j.ID_Jadwal].Status === 'Selesai').length;
+  const pct = today.length ? Math.round(nDone / today.length * 100) : 0;
+  const draf = ((b.stat && b.stat.sesiDraf) || []).filter(x => x.Tanggal !== tgl && mine.some(j => j.ID_Jadwal === x.ID_Jadwal));
   el.innerHTML =
     pageHead({
-      eyebrow: 'Modul Akademik // Tenaga Pendidik',
+      eyebrow: 'Penilaian Harian // Tenaga Pendidik',
       title: 'Dashboard Gadik',
-      desc: 'Selamat datang, <b>' + esc(me.Nama_Lengkap) + '</b>' + (me.NRP ? ' <span class="nrp">NRP ' + esc(me.NRP) + '</span>' : '') + '. Kelola data dan nilai peserta didik di kelas penugasan Anda.',
-      chips: roleBadge('Gadik') + '<span class="chip">' + icon('lock', 'sm') + 'Isolasi kelas sendiri</span>'
+      desc: 'Selamat datang, <b>' + esc(me.Nama_Lengkap) + '</b>' + (me.NRP ? ' <span class="nrp">NRP ' + esc(me.NRP) + '</span>' : '') + '. Input nilai harian setiap sesi yang Anda ajar, lalu kirim ke rekap.',
+      chips: roleBadge('Gadik') + '<span class="chip">' + icon('lock', 'sm') + 'Isolasi kelas sendiri</span>',
+      actions: today.length ? '<a class="btn primary" href="' + nilaiHref(tgl) + '">' + icon('pen') + 'Input Nilai Hari Ini</a>' : ''
     }) +
-    '<div class="notice"><div class="icon-tile">' + icon('shield-check') + '</div><div><b>Hak akses terbatas pada kelas penugasan</b><p>Anda hanya dapat melihat dan mengubah data peserta serta nilai di kelas yang ditugaskan Admin Satdik. Data kelas lain tidak dapat diakses.</p></div></div>' +
+    '<div class="notice"><div class="icon-tile">' + icon('shield-check') + '</div><div><b>Hak akses terbatas pada kelas penugasan</b><p>Anda hanya dapat melihat dan mengubah data peserta serta nilai sesi yang Anda ajar di kelas penugasan. Data kelas lain tidak dapat diakses.</p></div></div>' +
     (kelas.length ? '' : '<div class="notice red"><div class="icon-tile">' + icon('alert-triangle') + '</div><div><b>Belum ada penugasan kelas</b><p>Hubungi Admin Satdik agar akun Anda ditugaskan ke kelas.</p></div></div>') +
     '<div class="grid c3">' +
       '<div class="card pad"><div class="row between"><span class="label-mono">Kelas Binaan</span><div class="icon-tile">' + icon('building') + '</div></div>' +
-        (kelas.length ? kelas.map(k => '<div class="mt-8"><b style="font-size:18px">' + esc(k.Nama_Kelas) + '</b><div class="muted small">' + esc(k.Nama_Angkatan) + ' • <span class="mono">' + cnt(k.ID_Kelas) + '</span> peserta</div></div>').join('') : '<p class="muted mt-8">—</p>') + '</div>' +
+        (kelas.length ? kelas.map(k => '<div class="mt-8"><b style="font-size:18px">' + esc(k.Nama_Kelas) + '</b><div class="muted small">' + esc(k.Nama_Angkatan) + ' • <span class="mono">' + pesertaCount(k.ID_Kelas) + '</span> peserta</div></div>').join('') : '<p class="muted mt-8">—</p>') + '</div>' +
       '<div class="card pad"><div class="row between"><span class="label-mono">Mata Pelajaran Diampu</span><div class="icon-tile">' + icon('book') + '</div></div>' +
-        (prog.length ? Array.from(new Set(prog.map(p => p.m))).map(m => '<div class="mt-8"><b>' + esc(mapelName(m)) + '</b></div>').join('') : '<p class="muted mt-8">Belum ada jadwal mengajar.</p>') + '</div>' +
-      '<div class="card pad"><div class="row between"><span class="label-mono">Progres Pengisian Nilai</span><div class="icon-tile">' + icon('clipboard-check') + '</div></div>' +
-        (prog.length ? prog.slice(0, 4).map(p => '<div class="mt-16"><div class="row between small"><span>' + esc(mapelName(p.m)) + ' • ' + esc(kelasName(p.k)) + '</span><b class="mono">' + p.done + '/' + p.total + '</b></div><div class="progress mt-8"><span style="width:' + p.pct + '%"></span></div></div>').join('') : '<p class="muted mt-8">Progres muncul setelah jadwal mengajar diatur.</p>') + '</div>' +
+        (mapelIds.length ? mapelIds.map(m => '<div class="mt-8"><b>' + esc(mapelName(m)) + '</b><div class="muted small">' + mine.filter(j => j.ID_Mapel === m).map(j => j.Hari).filter((h, i, a) => a.indexOf(h) === i).join(', ') + '</div></div>').join('') : '<p class="muted mt-8">Belum ada jadwal mengajar.</p>') + '</div>' +
+      '<div class="card pad"><div class="row between"><span class="label-mono">Nilai Harian Hari Ini</span><div class="icon-tile">' + icon('clipboard-check') + '</div></div>' +
+        (today.length
+          ? '<div class="stat" style="border:0;box-shadow:none;padding:0;min-height:0;margin-top:8px"><div class="big">' + nDone + '<small>/ ' + today.length + ' sesi</small></div></div>' +
+            '<div class="progress lg mt-8"><span style="width:' + pct + '%"></span></div><div class="small muted mt-8">' + (nDone === today.length ? 'Semua sesi hari ini sudah masuk rekap.' : (today.length - nDone) + ' sesi belum dikirim ke rekap') + '</div>' +
+            '<a class="btn primary block mt-16" href="' + nilaiHref(tgl) + '">Input nilai hari ini' + icon('arrow-right', 'sm') + '</a>'
+          : '<p class="muted mt-8">Tidak ada sesi mengajar hari ' + esc(now.hari) + '.</p><a class="btn outline block mt-16" href="#/nilai">Buka Input Nilai</a>') + '</div>' +
     '</div>' +
+    (draf.length ? '<div class="notice red mt-24"><div class="icon-tile">' + icon('clock') + '</div><div class="grow"><b>' + draf.length + ' sesi sebelumnya belum dikirim ke rekap</b><p>Nilai draf belum dihitung di rekap sampai Anda menekan “Selesai &amp; Kirim ke Rekap”.</p><div class="draf-list">' +
+      draf.slice(0, 6).map(x => '<a class="btn outline xs" href="' + nilaiHref(x.Tanggal, x.ID_Jadwal) + '">' + esc(fmt.tgl(x.Tanggal, { hari: true, short: true })) + ' • ' + esc(mapelName(x.ID_Mapel)) + ' (' + esc(kelasName(x.ID_Kelas)) + ')' + icon('arrow-right', 'sm') + '</a>').join('') + '</div></div></div>' : '') +
+    '<div class="card mt-24"><div class="card-head"><div class="icon-tile">' + icon('clock') + '</div><div class="grow"><h3>Sesi Mengajar Hari Ini (' + esc(now.hari) + ')</h3><div class="sub">' + esc(fmt.tgl(tgl)) + ' • Zona waktu WIT (UTC+9)</div></div></div>' +
+      '<div class="card-body">' + (today.length ? '<div class="sessions">' + today.map((j, i) => {
+        const s = ss[j.ID_Jadwal], done = s && s.Status === 'Selesai';
+        return sessionCard(j, i, true, sesiBadge(s, pesertaCount(j.ID_Kelas)) + '<a class="btn ' + (done ? 'outline' : 'primary') + ' sm" href="' + nilaiHref(tgl, j.ID_Jadwal) + '">' + (done ? icon('eye', 'sm') + 'Lihat nilai' : icon('pen', 'sm') + 'Input nilai') + '</a>');
+      }).join('') + '</div>' : emptyState('calendar', 'Tidak ada sesi mengajar hari ini', 'Jadwal mengajar Anda kosong untuk hari ' + now.hari + '.')) + '</div></div>' +
     '<div class="section-title"><h2>Menu Pintas</h2><span class="label-mono">Aksi cepat</span></div>' +
     '<div class="grid c3">' +
-      shortcut('peserta', 'users', 'Data Peserta Didik', 'Tambah dan perbarui nama, pangkat, NRP, dan peleton peserta di kelas Anda.', 'Buka daftar') +
-      shortcut('nilai', 'pen', 'Input Nilai Mapel', 'Isi nilai 0–100 per mata pelajaran. Tersimpan otomatis begitu Anda mengetik.', 'Mulai input') +
+      shortcut('peserta', 'users', 'Data Peserta Pelatihan', 'Tambah dan perbarui nama, pangkat, NRP, dan peleton peserta di kelas Anda.', 'Buka daftar') +
+      shortcut('nilai', 'pen', 'Input Nilai Harian', 'Pilih tanggal dan sesi, isi nilai, lalu kirim ke rekap. Draf tersimpan otomatis.', 'Mulai input') +
       shortcut('jadwal', 'calendar', 'Jadwal Kelas', 'Lihat jadwal pelajaran mingguan kelas Anda beserta pengajar dan ruangan.', 'Lihat jadwal') +
-    '</div>' +
-    '<div class="card mt-24"><div class="card-head"><div class="icon-tile">' + icon('clock') + '</div><div class="grow"><h3>Jadwal Kelas Hari Ini (' + esc(now.hari) + ')</h3><div class="sub">Zona waktu WIT (UTC+9)</div></div></div>' +
-      '<div class="card-body">' + (today.length ? '<div class="sessions">' + today.map((j, i) => sessionCard(j, i, kelas.length > 1)).join('') + '</div>' : emptyState('calendar', 'Tidak ada pelajaran hari ini', 'Jadwal kelas Anda kosong untuk hari ' + now.hari + '.')) + '</div></div>';
+    '</div>';
 }
 
 function dashPengasuh(el) {
@@ -287,7 +313,7 @@ function dashPengasuh(el) {
 }
 
 // ==========================================================================
-// PESERTA DIDIK (US-09, US-13)
+// PESERTA PELATIHAN (US-09, US-13)
 // ==========================================================================
 const PesertaPage = (() => {
   const st = { kelas: '', pel: '', q: '' };
@@ -301,10 +327,10 @@ const PesertaPage = (() => {
     const multi = S.role === 'Admin' || myKelas().length > 1;
     el.innerHTML =
       pageHead({
-        eyebrow: S.role === 'Admin' ? 'Data Peserta Didik // Semua Kelas' : S.role === 'Gadik' ? 'Data Peserta Didik // Isolasi Kelas Binaan' : 'Data Peserta Didik // Peleton Binaan',
-        title: 'Peserta Didik',
+        eyebrow: S.role === 'Admin' ? 'Data Peserta Pelatihan // Semua Kelas' : S.role === 'Gadik' ? 'Data Peserta Pelatihan // Isolasi Kelas Binaan' : 'Data Peserta Pelatihan // Peleton Binaan',
+        title: 'Peserta Pelatihan',
         desc: S.role === 'Gadik' ? 'Daftar resmi peserta di kelas penugasan Anda. Anda dapat menambah dan memperbarui nama, pangkat, NRP, dan peleton.' :
-          S.role === 'Admin' ? 'Daftar peserta didik seluruh kelas (lihat saja). Data diinput oleh Gadik di masing-masing kelas.' :
+          S.role === 'Admin' ? 'Daftar peserta pelatihan seluruh kelas (lihat saja). Data diinput oleh Gadik di masing-masing kelas.' :
           'Daftar peserta di kelas/peleton binaan Anda (lihat saja).',
         chips: S.role === 'Admin' ? '<span class="chip line">' + icon('eye', 'sm') + 'Mode lihat</span>' : '<span class="chip">' + icon('lock', 'sm') + (S.role === 'Gadik' ? 'Kelas penugasan' : 'Peleton binaan') + '</span>',
         actions: canEdit() ? '<button class="btn primary" id="ps-add">' + icon('user-plus') + 'Tambah Peserta</button>' : ''
@@ -336,8 +362,8 @@ const PesertaPage = (() => {
     const cols = [
       { key: 'no', label: 'No', sort: false, cls: 'no', render: (r, i) => pad2(i + 1) },
       { key: 'NRP', label: 'NRP', render: r => '<span class="nrp">' + esc(r.NRP) + '</span>', cls: 'nowrap' },
-      { key: 'Nama_Lengkap', label: 'Nama Lengkap', cls: 'card-title', render: r => '<div class="t-person"><div class="avatar sm">' + esc(initials(r.Nama_Lengkap)) + '</div><div class="t-name"><b>' + esc(r.Nama_Lengkap) + '</b><small>' + esc(r.Pangkat || 'Siswa') + '</small></div></div>' },
-      { key: 'Pangkat', label: 'Pangkat', render: r => esc(r.Pangkat || 'Siswa') }
+      { key: 'Nama_Lengkap', label: 'Nama Lengkap', cls: 'card-title', render: r => '<div class="t-person"><div class="avatar sm">' + esc(initials(r.Nama_Lengkap)) + '</div><div class="t-name"><b>' + esc(r.Nama_Lengkap) + '</b><small>' + esc(r.Pangkat || '—') + '</small></div></div>' },
+      { key: 'Pangkat', label: 'Pangkat', render: r => r.Pangkat ? esc(r.Pangkat) : '<span class="faint">—</span>' }
     ];
     if (S.role === 'Admin' || myKelas().length > 1) cols.push({ key: 'kelas', label: 'Kelas', sort: r => kelasName(r.ID_Kelas, true), render: r => esc(kelasName(r.ID_Kelas)) + '<div class="faint small">' + esc((R().kelas[r.ID_Kelas] || {}).Nama_Angkatan || '') + '</div>' });
     cols.push({ key: 'pel', label: 'Peleton', sort: r => pelName(r.ID_Peleton), render: r => r.ID_Peleton ? '<span class="chip line">' + esc(pelName(r.ID_Peleton)) + '</span>' : '<span class="faint">—</span>' });
@@ -383,11 +409,11 @@ const PesertaPage = (() => {
     const kSel = isEdit ? p.ID_Kelas : (st.kelas || (kel[0] && kel[0].ID_Kelas) || '');
     if (!kel.length) { toast('Belum ada kelas', 'Akun Anda belum ditugaskan ke kelas. Hubungi Admin Satdik.', 'warning'); return; }
     const m = openModal({
-      title: (isEdit ? 'Ubah Peserta Didik — ' : 'Tambah Peserta Didik — ') + kelasName(kSel), sub: 'Registrasi buku induk peserta', icon: isEdit ? 'edit' : 'user-plus',
+      title: (isEdit ? 'Ubah Peserta — ' : 'Tambah Peserta — ') + kelasName(kSel), sub: 'Registrasi peserta pelatihan', icon: isEdit ? 'edit' : 'user-plus',
       body: '<form id="pf" class="form-grid" novalidate>' +
         '<div id="pf-alert" class="alert red span-all" hidden></div>' +
         '<div class="field"><label>NRP <span class="req">*</span><span class="tag">Wajib unik</span></label><input name="NRP" class="input mono" value="' + esc(isEdit ? p.NRP : '') + '" maxlength="25" placeholder="Contoh: 03051004" autocomplete="off"><div class="hint">Angka/huruf tanpa spasi. NRP tidak boleh sama dengan peserta lain.</div></div>' +
-        '<div class="field"><label>Pangkat</label><input name="Pangkat" class="input" value="' + esc(isEdit ? p.Pangkat : 'Siswa') + '" maxlength="40"></div>' +
+        '<div class="field"><label>Pangkat</label><input name="Pangkat" class="input" value="' + esc(isEdit ? p.Pangkat : '') + '" maxlength="40" placeholder="Contoh: BRIPDA"></div>' +
         '<div class="field span-all"><label>Nama Lengkap <span class="req">*</span></label><input name="Nama_Lengkap" class="input" value="' + esc(isEdit ? p.Nama_Lengkap : '') + '" maxlength="120" placeholder="Contoh: Daniel Krey"></div>' +
         '<div class="field"><label>Kelas <span class="req">*</span></label><select name="ID_Kelas" class="select"' + (kel.length <= 1 ? ' disabled' : '') + '>' + options(kel, 'ID_Kelas', k => k.Nama_Kelas + ' — ' + k.Nama_Angkatan, kSel) + '</select></div>' +
         '<div class="field"><label>Peleton <span class="req">*</span></label><select name="ID_Peleton" class="select"></select></div>' +
@@ -438,7 +464,7 @@ const PesertaPage = (() => {
   }
 
   return {
-    title: 'Peserta Didik',
+    title: 'Peserta Pelatihan',
     show(root, param, o) { if (o.isNew || !table) build(root); fillKelas(); fillPel(); refresh(!o.isNew); },
     onBoot() { if (!el) return; fillKelas(); fillPel(); refresh(true); }
   };
@@ -494,127 +520,264 @@ page('jadwal', {
 });
 
 // ==========================================================================
-// INPUT NILAI MATA PELAJARAN — Gadik (US-10)
+// INPUT NILAI HARIAN — Gadik (US-10)
+// Alur: pilih tanggal → pilih sesi yang diajar (radio-card) → isi nilai seluruh
+// peserta (draf tersimpan otomatis) → "Selesai & Kirim ke Rekap" (nilai dikunci).
 // ==========================================================================
 const NilaiPage = (() => {
-  const st = { kelas: '', mapel: '', pel: '', status: '', q: '' };
-  let el, table, saver, loadErr = null;
-  const data = () => (S.data.nilai || {})[st.kelas];
-  const savedOf = pid => { const d = data(); const m = d && d.nilai[st.mapel]; return m ? m[pid] : null; };
+  const st = { tgl: '', jid: '', pel: '', status: '', q: '' };
+  const savers = {};
+  let el, table = null, saver = null, loadErr = null, workFor = '';
+
+  const key = (t, j) => 'draft:nilai:' + t + ':' + j;
+  const J = id => S.boot.jadwal.find(j => j.ID_Jadwal === id);
+  const day = () => (S.data.harian || {})[st.tgl];
+  const sesi = () => { const d = day(); return d && st.jid ? d.sesi[st.jid] || null : null; };
+  const locked = () => { const s = sesi(); return !!(s && s.Status === 'Selesai'); };
+  const savedOf = pid => { const d = day(), m = d && d.nilai[st.jid]; return m ? m[pid] || null : null; };
+  const peserta = () => { const j = J(st.jid); return j ? S.boot.peserta.filter(p => p.ID_Kelas === j.ID_Kelas) : []; };
+
+  /** Sesi yang diajar Gadik ini pada tanggal tsb (urut jam). Daftar server dipakai bila sudah dimuat. */
+  function mySessions(tgl) {
+    const hari = hariOf(tgl), d = (S.data.harian || {})[tgl];
+    let list = S.boot.jadwal.filter(j => j.ID_Gadik === S.me.ID_Gadik && j.Hari === hari);
+    if (d && d.jadwal) { const ok = new Set(d.jadwal); list = list.filter(j => ok.has(j.ID_Jadwal)); }
+    return list.sort((a, b) => menit(a.Jam_Mulai) - menit(b.Jam_Mulai));
+  }
 
   function build(root) {
     el = root;
     el.innerHTML =
       pageHead({
-        eyebrow: 'Penilaian Akademik // Input Nilai',
-        title: 'Input Nilai Mata Pelajaran',
-        desc: 'Pilih kelas dan mata pelajaran, lalu isi nilai 0–100. Nilai <b>tersimpan otomatis</b> beberapa detik setelah Anda berhenti mengetik — tekan <span class="kbd">Enter</span> untuk pindah ke peserta berikutnya.',
-        chips: '<span class="chip ink">' + icon('lock', 'sm') + '<span id="nv-scope">Kelas</span></span>'
+        eyebrow: 'Penilaian Harian // Tenaga Pendidik',
+        title: 'Input Nilai Harian',
+        desc: 'Pilih <b>tanggal</b> dan <b>sesi</b> yang Anda ajar, isi nilai 0–100 seluruh peserta, lalu tekan <b>Selesai &amp; Kirim ke Rekap</b>. Nilai tersimpan otomatis sebagai draf saat Anda mengetik — tekan <span class="kbd">Enter</span> untuk pindah ke peserta berikutnya.',
+        chips: '<span class="chip ink">' + icon('lock', 'sm') + 'Hanya sesi yang Anda ajar</span>'
       }) +
-      '<div class="card"><div class="toolbar">' +
-        '<div class="field"><label for="nv-kelas">Kelas</label><select id="nv-kelas" class="select"></select></div>' +
-        '<div class="field"><label for="nv-mapel">Mata Pelajaran</label><select id="nv-mapel" class="select"></select></div>' +
-        '<div class="field narrow"><label for="nv-pel">Peleton</label><select id="nv-pel" class="select"></select></div>' +
-        '<div class="field narrow"><label for="nv-status">Status</label><select id="nv-status" class="select"><option value="">Semua</option><option value="empty">Belum diisi</option><option value="saved">Tersimpan</option><option value="draft">Draf / gagal</option></select></div>' +
-        '<div class="field search"><label for="nv-q">Cari</label><div class="input-wrap">' + icon('search', 'lead') + '<input id="nv-q" class="input with-lead" placeholder="Nama atau NRP…" autocomplete="off"></div></div>' +
-      '</div><div id="nv-table"></div></div>' +
-      '<div class="sticky-bar"><div class="prog"><div class="row between"><b>Progres pengisian</b><span class="mono" id="nv-prog-t">0/0</span></div><div class="progress"><span id="nv-prog" style="width:0"></span></div></div>' +
-        '<span class="small muted" id="nv-save-state">' + icon('check-circle', 'sm') + ' Semua perubahan tersimpan</span>' +
-        '<button class="btn outline" id="nv-reset">Batalkan Draf</button><button class="btn primary" id="nv-save">' + icon('save') + 'Simpan Sekarang</button></div>';
+      '<div class="card"><div class="card-head">' +
+        '<div class="step-no">1</div><div class="grow"><h3>Tanggal &amp; sesi</h3><div class="sub" id="nh-hari"></div></div>' +
+        '<div class="nh-date"><button class="btn icon" id="nh-prev" type="button" aria-label="Hari sebelumnya" title="Hari sebelumnya">' + icon('chevron-left') + '</button>' +
+          '<input type="date" id="nh-date" class="input mono" aria-label="Tanggal penilaian">' +
+          '<button class="btn icon" id="nh-next" type="button" aria-label="Hari berikutnya" title="Hari berikutnya">' + icon('chevron-right') + '</button></div>' +
+        '<div class="seg" id="nh-quick"><button type="button" data-quick="0">Hari ini</button><button type="button" data-quick="-1">Kemarin</button></div>' +
+      '</div><div class="card-body"><div class="label-mono" style="margin-bottom:10px">Sesi yang Anda ajar</div><div id="nh-sesi"></div></div></div>' +
+      '<div id="nh-draf"></div>' +
+      '<div id="nh-work"></div>';
 
-    table = new Table($('#nv-table', el), {
+    $('#nh-date', el).addEventListener('change', e => { if (e.target.value) selectDate(e.target.value); else e.target.value = st.tgl; });
+    $('#nh-prev', el).onclick = () => selectDate(addDays(st.tgl, -1));
+    $('#nh-next', el).onclick = () => selectDate(addDays(st.tgl, 1));
+    $('#nh-quick', el).onclick = e => { const b = e.target.closest('[data-quick]'); if (b) selectDate(addDays(todayStr(), Number(b.dataset.quick))); };
+    const sh = $('#nh-sesi', el);
+    sh.addEventListener('change', e => { if (e.target.name === 'nh-sesi') selectSesi(e.target.value); });
+    sh.addEventListener('click', e => {
+      const g = e.target.closest('[data-goto]'); if (g) return selectDate(g.dataset.goto);
+      if (e.target.closest('[data-retry]')) load(true);
+    });
+    $('#nh-draf', el).addEventListener('click', e => {
+      const b = e.target.closest('[data-open-sesi]');
+      if (b) { const [t, j] = b.dataset.openSesi.split('/'); selectDate(t, j); scrollToWork(); }
+    });
+  }
+
+  // ---------- pemilihan tanggal & sesi ----------
+  function selectDate(tgl, jid) {
+    if (!isTgl(tgl)) return;
+    const today = todayStr();
+    if (tgl > today) { toast('Tanggal belum tiba', 'Nilai hanya dapat diisi untuk hari ini atau tanggal yang sudah lewat.', 'warning'); tgl = today; }
+    flushCurrent();
+    const sameDay = tgl === st.tgl;
+    st.tgl = tgl;
+    const list = mySessions(tgl);
+    if (jid !== undefined) st.jid = list.some(j => j.ID_Jadwal === jid) ? jid : '';
+    else if (!sameDay || !list.some(j => j.ID_Jadwal === st.jid)) st.jid = '';
+    if (!st.jid && list.length === 1) st.jid = list[0].ID_Jadwal;
+    afterSelect();
+    load(false);
+  }
+  function selectSesi(jid) {
+    if (jid === st.jid) return;
+    const radioFocus = document.activeElement && document.activeElement.name === 'nh-sesi';
+    flushCurrent();
+    st.jid = jid;
+    afterSelect();
+    if (radioFocus) { const c = $('input[name="nh-sesi"]:checked', el); if (c) c.focus(); }
+    scrollToWork();
+  }
+  function afterSelect() {
+    if (workFor !== st.tgl + '|' + st.jid) { st.pel = ''; st.status = ''; st.q = ''; }
+    syncHash(); useSaver(); renderSesi(); renderDraf(); ensureWork();
+  }
+  function flushCurrent() { if (saver && saver.count()) saver.flush(); }
+  function scrollToWork() {
+    const box = $('#nh-work', el);
+    if (!box || !box.firstElementChild) return;
+    setTimeout(() => { const r = box.getBoundingClientRect(); if (r.top > window.innerHeight * 0.55) box.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30);
+  }
+  function syncHash() {
+    const param = st.tgl + (st.jid ? '/' + st.jid : '');
+    const h = '#/nilai/' + st.tgl + (st.jid ? '/' + encodeURIComponent(st.jid) : '');
+    if (S.current && S.current.name === 'nilai') { if (location.hash !== h) history.replaceState(null, '', h); S.current.param = param; }
+  }
+
+  // ---------- penyimpan otomatis per sesi (draf tahan muat ulang) ----------
+  function useSaver() {
+    if (!st.jid || locked()) { saver = null; return; }
+    const k = key(st.tgl, st.jid);
+    if (!savers[k]) savers[k] = makeSaver(st.tgl, st.jid);
+    saver = savers[k];
+  }
+  function makeSaver(tgl, jid) {
+    const here = () => st.tgl === tgl && st.jid === jid;
+    return new AutoSaver({
+      key: key(tgl, jid), delay: 1500,
+      send: batch => api('nilaiSave', { tanggal: tgl, idJadwal: jid, items: Object.keys(batch).map(id => ({ id, nilai: batch[id] })) }),
+      onState: id => { if (here() && el) updateRow(id); },
+      onSaved: res => {
+        const d = (S.data.harian || {})[tgl];
+        if (d) {
+          const m = d.nilai[jid] = d.nilai[jid] || {};
+          res.data.saved.forEach(s => { if (s.nilai === '') delete m[s.id]; else m[s.id] = [s.nilai, s.waktu, S.me.Nama_Lengkap]; });
+          if (res.data.sesi) d.sesi[jid] = Object.assign({}, d.sesi[jid] || {}, res.data.sesi);
+          cachePut('harian:' + tgl, d);
+        }
+        if (res.data.sesi) sesiStatUpdate(res.data.sesi);
+        if (!el || st.tgl !== tgl) return;
+        renderSesi(); renderDraf();
+        if (here()) { renderHead(); updateProgress(); }
+      },
+      onFail: res => {
+        if (res.code === 'LOCKED') {
+          toast('Sesi sudah dikunci', res.message, 'warning');
+          if (here()) load(true);
+          return;
+        }
+        toast('Gagal menyimpan nilai', res.message + ' Draf tetap aman di perangkat ini.', 'error');
+      }
+    });
+  }
+
+  // ---------- tampilan: kartu sesi ----------
+  function renderSesi() {
+    const host = $('#nh-sesi', el), d = day(), list = mySessions(st.tgl), today = todayStr();
+    $('#nh-hari', el).textContent = fmt.tgl(st.tgl, { hari: true }) + (st.tgl === today ? ' • hari ini' : '');
+    const date = $('#nh-date', el);
+    date.max = today;
+    if (date.value !== st.tgl) date.value = st.tgl;
+    $('#nh-next', el).disabled = st.tgl >= today;
+    $$('#nh-quick [data-quick]', el).forEach(b => b.classList.toggle('on', addDays(today, Number(b.dataset.quick)) === st.tgl));
+
+    if (!list.length) {
+      const days = Array.from(new Set(S.boot.jadwal.filter(j => j.ID_Gadik === S.me.ID_Gadik).map(j => j.Hari))).sort((a, b) => HARI.indexOf(a) - HARI.indexOf(b));
+      host.innerHTML = days.length
+        ? emptyState('calendar', 'Tidak ada sesi Anda pada hari ' + hariOf(st.tgl), 'Anda mengajar pada hari ' + days.join(', ') + '. Pilih tanggal mengajar terakhir:',
+            '<div class="row" style="justify-content:center;gap:8px">' + days.map(h => { const t = lastDateOf(h, today); return '<button type="button" class="btn outline sm" data-goto="' + t + '">' + esc(fmt.tgl(t, { hari: true, short: true })) + '</button>'; }).join('') + '</div>')
+        : emptyState('calendar', 'Belum ada jadwal mengajar', 'Admin Satdik belum menjadwalkan Anda di kelas mana pun. Hubungi Admin Satdik.');
+      return;
+    }
+    host.innerHTML = '<div class="radio-cards sesi-cards" role="radiogroup" aria-label="Sesi mengajar">' + list.map(j => {
+      const on = j.ID_Jadwal === st.jid, s = d ? d.sesi[j.ID_Jadwal] : null, total = pesertaCount(j.ID_Kelas);
+      const done = !!(s && s.Status === 'Selesai');
+      const sv = savers[key(st.tgl, j.ID_Jadwal)];
+      const pend = done ? 0 : sv ? sv.count() : Object.keys(Store.get(uk(key(st.tgl, j.ID_Jadwal)), null) || {}).length;
+      return '<label class="radio-card sesi-card' + (on ? ' checked' : '') + (done ? ' done' : '') + '">' +
+        '<input type="radio" name="nh-sesi" value="' + esc(j.ID_Jadwal) + '"' + (on ? ' checked' : '') + '>' +
+        '<span class="sc-top"><span class="time">' + esc(fmt.jam(j.Jam_Mulai)) + '–' + esc(fmt.jam(j.Jam_Selesai)) + ' WIT</span>' +
+          (d ? sesiBadge(s, total) : loadErr ? '<span class="badge bad">Gagal memuat</span>' : '<span class="badge empty">Memuat…</span>') + '</span>' +
+        '<strong>' + esc(mapelName(j.ID_Mapel)) + '</strong>' +
+        '<span class="muted">' + esc(kelasName(j.ID_Kelas, true)) + ' • ' + total + ' peserta' + (j.Ruang ? ' • ' + esc(j.Ruang) : '') + '</span>' +
+        (pend ? '<span class="sc-pend">' + icon('clock', 'sm') + pend + ' nilai belum terkirim dari perangkat ini</span>' : '') +
+      '</label>';
+    }).join('') + '</div>' +
+      (loadErr && !d ? '<div class="alert red mt-16">' + icon('wifi-off') + '<div>Status sesi belum dapat dimuat: ' + esc(loadErr) + ' <button type="button" class="btn outline xs" data-retry>Coba lagi</button></div></div>' : '') +
+      (st.jid ? '' : '<p class="hint mt-16">' + icon('info', 'sm') + ' Pilih salah satu sesi di atas untuk mulai mengisi nilai.</p>');
+  }
+
+  /** Pengingat sesi lain yang masih draf (belum dikirim ke rekap). */
+  function renderDraf() {
+    const box = $('#nh-draf', el), stt = S.boot.stat || {}, all = stt.sesiDraf || [];
+    const list = all.filter(x => !(x.Tanggal === st.tgl && x.ID_Jadwal === st.jid) && J(x.ID_Jadwal));
+    if (!list.length) { box.innerHTML = ''; return; }
+    const n = Math.max(list.length, (stt.sesiDrafTotal || all.length) - (all.length - list.length));
+    box.innerHTML = '<div class="notice mt-24"><div class="icon-tile">' + icon('clock') + '</div><div class="grow"><b>' + n + ' sesi lain masih draf — belum masuk rekap</b>' +
+      '<p>Lengkapi lalu tekan <b>Selesai &amp; Kirim ke Rekap</b> agar nilainya dihitung.</p><div class="draf-list">' +
+      list.slice(0, 6).map(x => '<button type="button" class="btn outline xs" data-open-sesi="' + esc(x.Tanggal + '/' + x.ID_Jadwal) + '">' + esc(fmt.tgl(x.Tanggal, { hari: true, short: true })) + ' • ' + esc(mapelName(x.ID_Mapel)) + ' (' + esc(kelasName(x.ID_Kelas)) + ')' + icon('arrow-right', 'sm') + '</button>').join('') +
+      '</div></div></div>';
+  }
+
+  // ---------- tampilan: area pengisian nilai sesi terpilih ----------
+  function ensureWork() {
+    if (workFor !== st.tgl + '|' + st.jid || (st.jid && !$('#nh-table', el))) renderWork();
+    else if (st.jid) { renderHead(); refreshTable(true); }
+  }
+  function renderWork() {
+    const box = $('#nh-work', el), j = J(st.jid);
+    workFor = st.tgl + '|' + st.jid;
+    if (!st.jid || !j) { box.innerHTML = ''; table = null; return; }
+    box.innerHTML =
+      '<div class="card mt-24"><div class="card-head" id="nh-head"></div><div id="nh-note"></div>' +
+        '<div class="toolbar">' +
+          '<div class="field narrow"><label for="nh-pel">Peleton</label><select id="nh-pel" class="select">' + options(pelOf(j.ID_Kelas), 'ID_Peleton', p => p.Nama_Peleton, st.pel, 'Semua') + '</select></div>' +
+          '<div class="field narrow"><label for="nh-status">Status</label><select id="nh-status" class="select"><option value="">Semua</option><option value="empty">Belum diisi</option><option value="saved">Sudah diisi</option><option value="draft">Draf / gagal</option></select></div>' +
+          '<div class="field search"><label for="nh-q">Cari</label><div class="input-wrap">' + icon('search', 'lead') + '<input id="nh-q" class="input with-lead" placeholder="Nama atau NRP…" autocomplete="off" value="' + esc(st.q) + '"></div></div>' +
+        '</div><div id="nh-table"></div></div>' +
+      '<div class="sticky-bar" id="nh-bar"></div>';
+    $('#nh-status', el).value = st.status;
+    const host = $('#nh-table', el);
+    table = new Table(host, {
       key: 'ID_Peserta', unit: 'peserta', pageSize: 50, sizes: [25, 50, 100], sort: { key: 'Nama_Lengkap', dir: 'asc' },
       columns: [
         { key: 'no', label: 'No', sort: false, cls: 'no', render: (r, i) => pad2(i + 1) },
         { key: 'NRP', label: 'NRP', render: r => '<span class="nrp">' + esc(r.NRP) + '</span>' },
-        { key: 'Nama_Lengkap', label: 'Nama Peserta', cls: 'card-title', render: r => '<div class="t-name"><b>' + esc(r.Nama_Lengkap) + '</b><small>' + esc(pelName(r.ID_Peleton)) + '</small></div>' },
-        { key: 'pel', label: 'Peleton', sort: r => pelName(r.ID_Peleton), render: r => esc(pelName(r.ID_Peleton)) },
+        { key: 'Nama_Lengkap', label: 'Nama Peserta', cls: 'card-title', render: r => '<div class="t-name"><b>' + esc(r.Nama_Lengkap) + '</b><small>' + (r.Pangkat ? esc(r.Pangkat) + ' • ' : '') + esc(pelName(r.ID_Peleton)) + '</small></div>' },
+        { key: 'pel', label: 'Peleton', cls: 'm-hide', sort: r => pelName(r.ID_Peleton), render: r => esc(pelName(r.ID_Peleton)) },
         { key: 'nilai', label: 'Nilai (0–100)', sort: r => { const v = valueOf(r.ID_Peserta); return v === '' ? '' : Number(v); }, render: r => gradeInput(r.ID_Peserta) },
-        { key: 'status', label: 'Status', sort: r => statusKey(r.ID_Peserta), render: r => '<span data-st="' + esc(r.ID_Peserta) + '">' + statusHtml(r.ID_Peserta) + '</span>' },
-        { key: 'at', label: 'Diperbarui', sort: r => { const s = savedOf(r.ID_Peserta); return s ? s[1] : ''; }, render: r => '<span class="small muted" data-at="' + esc(r.ID_Peserta) + '">' + atHtml(r.ID_Peserta) + '</span>' }
+        { key: 'status', label: 'Status', sort: r => statusKey(r.ID_Peserta), render: r => '<span data-st="' + esc(r.ID_Peserta) + '">' + statusHtml(r.ID_Peserta) + '</span>' }
       ],
-      empty: () => emptyState('users', 'Tidak ada peserta', st.q ? 'Tidak ada peserta yang cocok.' : 'Belum ada peserta di kelas ini. Tambahkan lewat menu Peserta Didik.', st.q ? '' : '<a class="btn primary" href="#/peserta">Buka Peserta Didik</a>'),
+      empty: () => emptyState('users', 'Tidak ada peserta', st.q || st.pel || st.status ? 'Tidak ada peserta yang cocok dengan filter.' : 'Belum ada peserta di kelas ini. Tambahkan lewat menu Peserta Pelatihan.', st.q || st.pel || st.status ? '' : '<a class="btn primary" href="#/peserta">Buka Peserta Pelatihan</a>'),
       afterRender: updateProgress
     });
-
-    const host = $('#nv-table', el);
     host.addEventListener('input', e => { if (e.target.matches('.grade-in')) onInput(e.target); });
     host.addEventListener('keydown', e => {
-      if (!e.target.matches('.grade-in')) return;
-      if (e.key === 'Enter' || e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        e.preventDefault();
-        const ins = $$('.grade-in', host), i = ins.indexOf(e.target), n = ins[i + (e.key === 'ArrowUp' ? -1 : 1)];
-        if (n) { n.focus(); n.select(); }
-      }
+      if (!e.target.matches('.grade-in') || ['Enter', 'ArrowDown', 'ArrowUp'].indexOf(e.key) === -1) return;
+      e.preventDefault();
+      const ins = $$('.grade-in:not([disabled])', host), i = ins.indexOf(e.target), n = ins[i + (e.key === 'ArrowUp' ? -1 : 1)];
+      if (n) { n.focus(); n.select(); } else if (e.key === 'Enter') { const b = $('#nh-done', el); if (b) b.focus(); }
     });
     host.addEventListener('click', e => { if (e.target.closest('[data-retry]')) load(true); });
-    $('#nv-kelas', el).onchange = e => { switchTo(e.target.value, st.mapel); };
-    $('#nv-mapel', el).onchange = e => { switchTo(st.kelas, e.target.value); };
-    $('#nv-pel', el).onchange = e => { st.pel = e.target.value; refresh(); };
-    $('#nv-status', el).onchange = e => { st.status = e.target.value; refresh(); };
-    $('#nv-q', el).addEventListener('input', debounce(e => { st.q = e.target.value; refresh(); }, 250));
-    $('#nv-save', el).onclick = () => { if (saver && saver.count()) saver.flush(); else toast('Tidak ada perubahan', 'Semua nilai sudah tersimpan.', 'info'); };
-    $('#nv-reset', el).onclick = async () => {
-      if (!saver || !saver.count()) return toast('Tidak ada draf', 'Tidak ada nilai yang belum tersimpan.', 'info');
-      if (await confirmBox({ title: 'Batalkan draf?', text: saver.count() + ' nilai yang belum tersimpan akan dikembalikan ke nilai terakhir.', okText: 'Batalkan draf', danger: true })) { saver.clear(); refresh(true); }
-    };
-  }
-
-  function myMapelIds(k) {
-    const ids = new Set();
-    S.boot.jadwal.forEach(j => { if (j.ID_Kelas === k && j.ID_Gadik === S.me.ID_Gadik) ids.add(j.ID_Mapel); });
-    return ids;
-  }
-  function fillSelects() {
-    const kel = kelasList();
-    if (!kel.some(k => k.ID_Kelas === st.kelas)) st.kelas = kel[0] ? kel[0].ID_Kelas : '';
-    const ks = $('#nv-kelas', el);
-    ks.innerHTML = options(kel, 'ID_Kelas', k => k.Nama_Kelas + ' — ' + k.Nama_Angkatan, st.kelas, kel.length ? null : 'Belum ada kelas');
-    ks.disabled = kel.length <= 1;
-    const mine = myMapelIds(st.kelas), all = mapelList(true);
-    if (!all.some(m => m.ID_Mapel === st.mapel)) st.mapel = (all.find(m => mine.has(m.ID_Mapel)) || all[0] || {}).ID_Mapel || '';
-    const a = all.filter(m => mine.has(m.ID_Mapel)), b = all.filter(m => !mine.has(m.ID_Mapel));
-    $('#nv-mapel', el).innerHTML = !all.length ? '<option value="">Belum ada mata pelajaran</option>' :
-      (a.length ? '<optgroup label="Mapel yang Anda ajar">' + options(a, 'ID_Mapel', m => m.Nama_Mapel, st.mapel) + '</optgroup><optgroup label="Mapel lain">' + options(b, 'ID_Mapel', m => m.Nama_Mapel, st.mapel) + '</optgroup>' : options(all, 'ID_Mapel', m => m.Nama_Mapel, st.mapel));
-    const pels = pelOf(st.kelas);
-    if (st.pel && !pels.some(p => p.ID_Peleton === st.pel)) st.pel = '';
-    $('#nv-pel', el).innerHTML = options(pels, 'ID_Peleton', p => p.Nama_Peleton, st.pel, 'Semua');
-    $('#nv-scope', el).textContent = 'Isolasi kelas: ' + (st.kelas ? kelasName(st.kelas) : '—');
-  }
-
-  function makeSaver() {
-    if (saver) saver.dispose();
-    if (!st.kelas || !st.mapel) { saver = null; return; }
-    const kelas = st.kelas, mapel = st.mapel;
-    saver = new AutoSaver({
-      key: 'draft:nilai:' + kelas + ':' + mapel,
-      delay: 1500,
-      send: batch => api('nilaiSave', { idKelas: kelas, idMapel: mapel, items: Object.keys(batch).map(id => ({ id, nilai: batch[id] })) }),
-      onState: id => { if (st.kelas === kelas && st.mapel === mapel) updateRow(id); },
-      onSaved: res => {
-        const d = (S.data.nilai || {})[kelas];
-        if (d) {
-          d.nilai[mapel] = d.nilai[mapel] || {};
-          res.data.saved.forEach(s => { if (s.nilai === '') delete d.nilai[mapel][s.id]; else d.nilai[mapel][s.id] = [s.nilai, s.waktu, S.me.Nama_Lengkap]; });
-          cachePut('nilai:' + kelas, d);
-          const stt = S.boot.stat.nilai = S.boot.stat.nilai || {};
-          stt[kelas] = stt[kelas] || {};
-          stt[kelas][mapel] = Object.keys(d.nilai[mapel]).length;
-          cachePut('boot', S.boot);
-        }
-        if (res.data.saved.length) toast('Nilai tersimpan', res.data.saved.length + ' nilai ' + mapelName(mapel) + ' tersimpan ke database.');
-        updateProgress();
-      },
-      onFail: res => toast('Gagal menyimpan nilai', res.message + ' Draf tetap aman di perangkat ini.', 'error')
+    $('#nh-pel', el).onchange = e => { st.pel = e.target.value; refreshTable(); };
+    $('#nh-status', el).onchange = e => { st.status = e.target.value; refreshTable(); };
+    $('#nh-q', el).addEventListener('input', debounce(e => { st.q = e.target.value; refreshTable(); }, 250));
+    $('#nh-bar', el).addEventListener('click', e => {
+      const b = e.target.closest('button[id]');
+      if (!b) return;
+      if (b.id === 'nh-save') manualSave();
+      else if (b.id === 'nh-done') finish();
+      else if (b.id === 'nh-reload') load(true);
     });
+    renderHead();
+    refreshTable();
   }
 
-  function switchTo(kelas, mapel) {
-    if (saver && saver.count()) saver.flush();
-    const changedKelas = kelas !== st.kelas;
-    st.kelas = kelas; st.mapel = mapel;
-    if (changedKelas) st.pel = '';
-    fillSelects(); makeSaver(); load(false);
+  function renderHead() {
+    const j = J(st.jid), head = $('#nh-head', el);
+    if (!j || !head) return;
+    const d = day(), s = sesi(), lk = locked(), total = pesertaCount(j.ID_Kelas);
+    head.innerHTML = '<div class="step-no">2</div><div class="grow"><h3>' + esc(mapelName(j.ID_Mapel)) + ' — ' + esc(kelasName(j.ID_Kelas)) + '</h3>' +
+      '<div class="sub">' + esc(fmt.tgl(st.tgl, { hari: true })) + ' • ' + esc(fmt.jam(j.Jam_Mulai)) + '–' + esc(fmt.jam(j.Jam_Selesai)) + ' WIT' + (j.Ruang ? ' • ' + esc(j.Ruang) : '') + ' • ' + total + ' peserta</div></div>' +
+      (!d ? '' : lk ? '<span class="badge ok">' + icon('lock', 'sm') + ' Terkunci • masuk rekap</span>' : s ? '<span class="badge draft">Draf • belum masuk rekap</span>' : '<span class="badge empty">Belum diisi</span>');
+    $('#nh-note', el).innerHTML = lk
+      ? '<div class="card-body" style="padding-bottom:0"><div class="alert green">' + icon('check-circle') + '<div><b>Nilai sesi ini sudah dikirim ke rekap</b>' + (s.Waktu_Selesai ? ' pada ' + esc(fmt.dateTime(s.Waktu_Selesai)) : '') + (s.Diselesaikan_Oleh ? ' oleh ' + esc(s.Diselesaikan_Oleh) : '') + '. Nilai dikunci — untuk koreksi, minta Admin Satdik membuka kunci sesi ini.</div></div></div>'
+      : s && s.Catatan_Admin
+        ? '<div class="card-body" style="padding-bottom:0"><div class="alert gold">' + icon('unlock') + '<div><b>Dibuka kembali oleh Admin Satdik</b> — ' + esc(s.Catatan_Admin) + '. Perbaiki nilai lalu tekan <b>Selesai &amp; Kirim ke Rekap</b> lagi.</div></div></div>'
+        : '';
+    const bar = $('#nh-bar', el);
+    bar.innerHTML = '<div class="prog"><div class="row between"><b>Peserta dinilai</b><span class="mono" id="nh-prog-t">0/0</span></div><div class="progress"><span id="nh-prog" style="width:0"></span></div></div>' +
+      (lk
+        ? '<span class="small muted">' + icon('lock', 'sm') + ' Nilai terkunci dan sudah dihitung di rekap</span><button type="button" class="btn outline" id="nh-reload">' + icon('refresh') + 'Periksa ulang</button>'
+        : '<span class="small muted" id="nh-save-state"></span><button type="button" class="btn outline" id="nh-save"' + (d ? '' : ' disabled') + '>' + icon('save') + 'Simpan Draf</button>' +
+          '<button type="button" class="btn primary" id="nh-done"' + (d ? '' : ' disabled') + '>' + icon('send') + 'Selesai &amp; Kirim ke Rekap</button>');
+    updateProgress();
   }
 
   function valueOf(pid) {
@@ -623,19 +786,24 @@ const NilaiPage = (() => {
     return s ? s[0] : '';
   }
   function statusKey(pid) { const s = saver ? saver.state(pid) : ''; return s || (savedOf(pid) ? 'saved' : 'empty'); }
-  function statusHtml(pid) { const s = saver ? saver.state(pid) : ''; return saveBadge(s, savedOf(pid) ? 1 : 0, saver && saver.errors[pid]); }
-  function atHtml(pid) { const s = savedOf(pid); return s ? esc(fmt.ago(s[1])) + (s[2] && s[2] !== S.me.Nama_Lengkap ? '<br><span class="faint">' + esc(s[2]) + '</span>' : '') : '—'; }
+  function statusHtml(pid) {
+    if (locked()) return savedOf(pid) ? '<span class="badge ok">Masuk rekap</span>' : '<span class="badge off">Tidak dinilai</span>';
+    const s = saver ? saver.state(pid) : '';
+    return saveBadge(s, savedOf(pid) ? 1 : 0, saver && saver.errors[pid]);
+  }
   function gradeInput(pid) {
-    const v = valueOf(pid), dirty = saver && saver.has(pid);
-    return '<div class="grade-cell"><input class="input grade-in' + (dirty ? ' dirty' : '') + '" inputmode="decimal" autocomplete="off" maxlength="6" data-pid="' + esc(pid) + '" value="' + esc(v === '' ? '' : String(v).replace('.', ',')) + '" placeholder="0–100" aria-label="Nilai"><span class="of">/100</span></div>';
+    const v = valueOf(pid), dirty = saver && saver.has(pid), lk = locked();
+    return '<div class="grade-cell"><input class="input grade-in' + (dirty ? ' dirty' : '') + '" inputmode="decimal" autocomplete="off" maxlength="6" data-pid="' + esc(pid) + '" value="' + esc(v === '' ? '' : String(v).replace('.', ',')) + '" placeholder="' + (lk ? '—' : '0–100') + '" aria-label="Nilai"' + (lk ? ' disabled' : '') + '><span class="of">/100</span></div>';
   }
 
   function onInput(input) {
+    if (!saver) return;
     const pid = input.dataset.pid, p = parseGrade(input.value), saved = savedOf(pid);
     input.classList.toggle('invalid', !!p.error);
     if (p.error) {
-      if (saver) saver.unset(pid);
-      $('[data-st="' + CSS.escape(pid) + '"]', el).innerHTML = saveBadge('invalid');
+      saver.unset(pid);
+      const sEl = el.querySelector('[data-st="' + CSS.escape(pid) + '"]');
+      if (sEl) sEl.innerHTML = saveBadge('invalid');
       return;
     }
     const val = p.empty ? '' : p.value, savedVal = saved ? saved[0] : '';
@@ -647,8 +815,6 @@ const NilaiPage = (() => {
   function updateRow(pid) {
     const sEl = el.querySelector('[data-st="' + CSS.escape(pid) + '"]');
     if (sEl) sEl.innerHTML = statusHtml(pid);
-    const aEl = el.querySelector('[data-at="' + CSS.escape(pid) + '"]');
-    if (aEl) aEl.innerHTML = atHtml(pid);
     const inp = el.querySelector('.grade-in[data-pid="' + CSS.escape(pid) + '"]');
     if (inp) {
       inp.classList.toggle('dirty', !!(saver && saver.has(pid)));
@@ -657,25 +823,25 @@ const NilaiPage = (() => {
     updateSaveState();
   }
   function updateSaveState() {
-    const box = $('#nv-save-state', el);
+    const box = $('#nh-save-state', el);
     if (!box) return;
     const n = saver ? saver.count() : 0, err = saver ? Object.keys(saver.errors).length : 0;
     box.innerHTML = err ? '<span style="color:var(--red)">' + icon('alert-circle', 'sm') + ' ' + err + ' gagal disimpan</span>' :
-      n ? icon('clock', 'sm') + ' ' + n + ' perubahan menunggu disimpan' : icon('check-circle', 'sm') + ' Semua perubahan tersimpan';
+      n ? icon('clock', 'sm') + ' ' + n + ' perubahan menunggu disimpan' : icon('check-circle', 'sm') + ' Draf tersimpan';
   }
   function updateProgress() {
-    const all = S.boot.peserta.filter(p => p.ID_Kelas === st.kelas);
+    const all = peserta();
     const filled = all.filter(p => { const v = valueOf(p.ID_Peserta); return v !== '' && v != null; }).length;
-    const t = $('#nv-prog-t', el), b = $('#nv-prog', el);
-    if (t) t.textContent = filled + '/' + all.length + ' peserta (' + (all.length ? Math.round(filled / all.length * 100) : 0) + '%)';
+    const t = $('#nh-prog-t', el), b = $('#nh-prog', el);
+    if (t) t.textContent = filled + '/' + all.length + ' (' + (all.length ? Math.round(filled / all.length * 100) : 0) + '%)';
     if (b) b.style.width = (all.length ? filled / all.length * 100 : 0) + '%';
     updateSaveState();
   }
 
   function rows() {
     const q = norm(st.q);
-    return S.boot.peserta.filter(p => {
-      if (p.ID_Kelas !== st.kelas || (st.pel && p.ID_Peleton !== st.pel)) return false;
+    return peserta().filter(p => {
+      if (st.pel && p.ID_Peleton !== st.pel) return false;
       if (q && norm(p.Nama_Lengkap).indexOf(q) === -1 && String(p.NRP).indexOf(q) === -1) return false;
       if (st.status) {
         const k = statusKey(p.ID_Peserta);
@@ -686,40 +852,97 @@ const NilaiPage = (() => {
       return true;
     });
   }
-
-  function refresh(keepPage) {
-    if (!st.kelas) { $('#nv-table', el).innerHTML = emptyState('building', 'Belum ada kelas', 'Akun Anda belum ditugaskan ke kelas. Hubungi Admin Satdik.'); return; }
-    if (!st.mapel) { $('#nv-table', el).innerHTML = emptyState('book', 'Belum ada mata pelajaran', 'Admin Satdik perlu menambahkan mata pelajaran terlebih dahulu.'); return; }
-    if (!data()) { $('#nv-table', el).innerHTML = loadErr ? errorState(loadErr) : skeletonRows(6, 5); updateProgress(); return; }
+  function refreshTable(keepPage) {
+    const host = $('#nh-table', el);
+    if (!host || !table) return;
+    if (!day()) { host.innerHTML = loadErr ? errorState(loadErr) : skeletonRows(6, 5); updateProgress(); return; }
     table.set(rows(), keepPage);
+  }
+
+  // ---------- aksi ----------
+  async function manualSave() {
+    if (!saver || !saver.count()) return toast('Tidak ada perubahan', 'Semua nilai sudah tersimpan sebagai draf.', 'info');
+    await saver.flush();
+    if (saver && !saver.count()) toast('Draf tersimpan', 'Tekan “Selesai & Kirim ke Rekap” bila nilai sesi ini sudah lengkap.');
+  }
+
+  async function finish() {
+    const j = J(st.jid);
+    if (!j || locked() || !day()) return;
+    const bad = $$('.grade-in.invalid', el);
+    if (bad.length) { toast('Periksa nilai', bad.length + ' isian bukan angka 0–100. Perbaiki dulu sebelum mengirim.', 'error'); bad[0].focus(); return; }
+    if (saver && saver.count()) {
+      const done = busy($('#nh-done', el), 'Menyimpan draf…');
+      await saver.flush();
+      done();
+      if (saver && saver.count()) { toast('Belum bisa dikirim', 'Sebagian nilai gagal disimpan. Periksa koneksi lalu coba lagi.', 'error'); return; }
+    }
+    if (locked()) return;
+    const all = peserta(), filled = all.filter(p => savedOf(p.ID_Peserta)).length, empty = all.length - filled;
+    if (!filled) { toast('Belum ada nilai', 'Isi minimal satu nilai sebelum mengirim ke rekap.', 'warning'); const f = $('.grade-in', el); if (f) f.focus(); return; }
+    const ok = await confirmBox({
+      title: 'Selesai & kirim ke rekap?', icon: 'send', okText: 'Ya, kirim ke rekap',
+      html: '<b>' + filled + ' dari ' + all.length + ' peserta</b> sudah dinilai untuk <b>' + esc(mapelName(j.ID_Mapel)) + '</b> — ' + esc(kelasName(j.ID_Kelas)) + ', ' + esc(fmt.tgl(st.tgl, { hari: true })) + '.' +
+        (empty ? '<br><br><span style="color:var(--red)"><b>' + empty + ' peserta belum diisi</b> dan tidak ikut dihitung pada sesi ini.</span>' : '') +
+        '<br><br>Setelah dikirim, nilai sesi ini <b>dikunci</b>. Koreksi hanya dapat dilakukan setelah Admin Satdik membuka kunci.'
+    });
+    if (!ok) return;
+    const tgl = st.tgl, jid = st.jid, done = busy($('#nh-done', el), 'Mengirim…');
+    const res = await api('nilaiSelesai', { tanggal: tgl, idJadwal: jid });
+    done();
+    if (!res.success) {
+      if (res.code === 'EMPTY') { toast('Belum ada nilai', res.message, 'warning'); load(true); return; }
+      toast('Gagal mengirim ke rekap', res.message, 'error');
+      return;
+    }
+    const d = (S.data.harian || {})[tgl];
+    if (d) { d.sesi[jid] = res.data.sesi; cachePut('harian:' + tgl, d); }
+    sesiStatUpdate(res.data.sesi);
+    toast('Nilai terkirim ke rekap', mapelName(j.ID_Mapel) + ' • ' + kelasName(j.ID_Kelas) + ' • ' + res.data.sesi.Jumlah + ' peserta. Nilai sesi ini kini terkunci.');
+    if (st.tgl === tgl && st.jid === jid) { useSaver(); renderSesi(); renderDraf(); renderHead(); refreshTable(true); }
   }
 
   function load(force) {
     loadErr = null;
-    const kelas = st.kelas;
-    if (!kelas) return refresh();
-    S.data.nilai = S.data.nilai || {};
-    refresh();
-    swr('nilai:' + kelas, 'nilaiList', { idKelas: kelas }, d => {
-      S.data.nilai[kelas] = d;
-      if (st.kelas !== kelas) return;
-      const focused = el.contains(document.activeElement) && document.activeElement.matches('.grade-in');
-      if (focused && $('.grade-in', el)) { $$('.grade-in', el).forEach(i => updateRow(i.dataset.pid)); updateProgress(); }
-      else refresh(true);
-    }, { fresh: force ? 0 : 30000, force, onError: res => { loadErr = res.message; if (st.kelas === kelas) refresh(); } });
+    const tgl = st.tgl;
+    if (!tgl) return;
+    S.data.harian = S.data.harian || {};
+    swr('harian:' + tgl, 'nilaiHarian', { tanggal: tgl }, (d, fromCache) => {
+      S.data.harian[tgl] = d;
+      if (!fromCache) Object.keys(d.sesi || {}).forEach(j => sesiStatUpdate(d.sesi[j]));   // selaraskan pengingat draf di dashboard
+      if (!el || st.tgl !== tgl) return;
+      const list = mySessions(tgl);
+      if (st.jid && !list.some(j => j.ID_Jadwal === st.jid)) st.jid = '';
+      if (!st.jid && list.length === 1) st.jid = list[0].ID_Jadwal;
+      syncHash(); useSaver(); renderSesi(); renderDraf();
+      const a = document.activeElement, typing = el.contains(a) && a.matches('.grade-in') && !locked();
+      if (workFor !== tgl + '|' + st.jid) renderWork();
+      else if (typing) { $$('.grade-in', el).forEach(i => updateRow(i.dataset.pid)); renderHead(); }
+      else if (st.jid) { renderHead(); refreshTable(true); }
+    }, {
+      fresh: force ? 0 : 20000, force,
+      onError: res => { loadErr = res.message; if (el && st.tgl === tgl) { renderSesi(); refreshTable(); } }
+    });
+    if (!day()) { renderSesi(); refreshTable(); }
   }
 
   return {
-    title: 'Input Nilai',
+    title: 'Input Nilai Harian',
     roles: ['Gadik'],
     show(root, param, o) {
-      if (o.isNew || !table) build(root);
-      fillSelects();
-      if (!saver || saver.o.key !== 'draft:nilai:' + st.kelas + ':' + st.mapel) makeSaver();
-      load(false);
+      if (o.isNew || !el) build(root);
+      const parts = String(param || '').split('/');
+      if (isTgl(parts[0])) selectDate(parts[0], parts[1] || undefined);
+      else selectDate(st.tgl || todayStr(), st.jid || undefined);
     },
-    onBoot() { if (!el) return; const k = st.kelas, m = st.mapel; fillSelects(); if (k !== st.kelas || m !== st.mapel) makeSaver(); refresh(true); },
-    leave() { if (saver && saver.count()) saver.flush(); }
+    onBoot() {
+      if (!el) return;
+      renderSesi(); renderDraf();
+      const a = document.activeElement;
+      if (el.contains(a) && a.matches('.grade-in')) return;
+      useSaver(); ensureWork();
+    },
+    leave() { Object.keys(savers).forEach(k => { if (savers[k].count()) savers[k].flush(); }); }
   };
 })();
 page('nilai', NilaiPage);
@@ -948,8 +1171,8 @@ function renderSettings(el) {
     '</div>' +
     (isAdmin ? '<div class="card mt-24"><div class="card-head"><div class="icon-tile">' + icon('database') + '</div><div class="grow"><h3>Pemeliharaan Sistem</h3><div class="sub">Berjalan otomatis di server Apps Script</div></div></div><div class="card-body"><div class="grid c3">' +
       '<div><div class="label-mono">Cadangan harian</div><p class="mt-8">Salinan database dibuat otomatis setiap pukul 02.00 WIT ke folder <b>Cadangan Harian</b> di Google Drive (14 salinan terakhir disimpan).</p></div>' +
-      '<div><div class="label-mono">Log aktivitas</div><p class="mt-8">Perubahan nilai, akun, dan jadwal dicatat dan ditulis ke sheet <b>Log_Aktivitas</b> setiap menit.</p></div>' +
-      '<div><div class="label-mono">Versi</div><p class="mt-8"><span class="mono">SIPL ' + esc(set.version || '1.0.0') + '</span> • Server Google Apps Script • Database Google Sheets</p></div>' +
+      '<div><div class="label-mono">Penguncian nilai harian</div><p class="mt-8">Nilai yang sudah dikirim Gadik ke rekap otomatis terkunci. Buka kunci untuk koreksi lewat <b>Rekap Nilai → Sesi Penilaian</b>.</p></div>' +
+      '<div><div class="label-mono">Versi</div><p class="mt-8"><span class="mono">SIPL ' + esc(set.version || '1.1.0') + '</span> • Server Google Apps Script • Database Google Sheets</p></div>' +
       '</div></div></div>' : '');
 
   const form = $('#pw-form', el);

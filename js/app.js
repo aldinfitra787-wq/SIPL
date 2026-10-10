@@ -4,17 +4,17 @@
 
 const NAV = {
   Admin: [
-    ['Navigasi Utama', [['dashboard', 'grid', 'Dashboard'], ['peserta', 'cap', 'Peserta Didik'], ['personel', 'id-card', 'Personel & Akun', 'ADMIN'], ['master', 'database', 'Master Data', 'ADMIN'], ['jadwal', 'calendar', 'Jadwal Pelajaran']]],
+    ['Navigasi Utama', [['dashboard', 'grid', 'Dashboard'], ['peserta', 'cap', 'Peserta Pelatihan'], ['personel', 'id-card', 'Personel & Akun', 'ADMIN'], ['master', 'database', 'Master Data', 'ADMIN'], ['jadwal', 'calendar', 'Jadwal Pelajaran']]],
     ['Penilaian', [['rekap', 'table', 'Rekap Nilai']]],
-    ['Sistem', [['log', 'activity', 'Log Aktivitas'], ['migrasi', 'import', 'Migrasi Data'], ['pengaturan', 'settings', 'Pengaturan']]]
+    ['Sistem', [['migrasi', 'import', 'Migrasi Data'], ['pengaturan', 'settings', 'Pengaturan']]]
   ],
   Gadik: [
-    ['Navigasi Utama', [['dashboard', 'grid', 'Dashboard'], ['peserta', 'cap', 'Peserta Didik'], ['jadwal', 'calendar', 'Jadwal Pelajaran']]],
-    ['Penilaian', [['nilai', 'pen', 'Input Nilai Mapel']]],
+    ['Navigasi Utama', [['dashboard', 'grid', 'Dashboard'], ['peserta', 'cap', 'Peserta Pelatihan'], ['jadwal', 'calendar', 'Jadwal Pelajaran']]],
+    ['Penilaian', [['nilai', 'pen', 'Input Nilai Harian']]],
     ['Akun', [['pengaturan', 'settings', 'Pengaturan']]]
   ],
   Pengasuh: [
-    ['Navigasi Utama', [['dashboard', 'grid', 'Dashboard'], ['peserta', 'cap', 'Peserta Didik'], ['jadwal', 'calendar', 'Jadwal Pelajaran']]],
+    ['Navigasi Utama', [['dashboard', 'grid', 'Dashboard'], ['peserta', 'cap', 'Peserta Pelatihan'], ['jadwal', 'calendar', 'Jadwal Pelajaran']]],
     ['Penilaian', [['mental', 'shield-star', 'Nilai Mental']]],
     ['Akun', [['pengaturan', 'settings', 'Pengaturan']]]
   ]
@@ -98,7 +98,7 @@ async function doLogin(e) {
 function loadScript(src) {
   return new Promise((ok, no) => {
     const s = document.createElement('script');
-    s.src = src + '?v=' + encodeURIComponent((S.boot && S.boot.settings && S.boot.settings.version) || '1');
+    s.src = src + '?v=' + FE_VERSION;
     s.onload = ok; s.onerror = no;
     document.head.appendChild(s);
   });
@@ -139,7 +139,8 @@ function startApp(boot) {
   const begin = () => {
     if (!location.hash || location.hash === '#/' || location.hash === '#') history.replaceState(null, '', '#/dashboard');
     route();
-    (window.requestIdleCallback || setTimeout)(prefetch, 1500);
+    // Prefetch saat browser senggang (requestIdleCallback butuh objek opsi, bukan angka)
+    setTimeout(() => { if (window.requestIdleCallback) window.requestIdleCallback(() => prefetch(), { timeout: 3000 }); else prefetch(); }, 1200);
   };
   if (S.role === 'Admin' && !window.ADMIN_READY) loadScript('js/admin.js').then(begin, () => { toast('Modul admin gagal dimuat', 'Periksa koneksi lalu muat ulang halaman.', 'error'); begin(); });
   else begin();
@@ -158,11 +159,14 @@ async function revalidate() {
 /** Prefetch data menu yang sering dibuka dalam SATU panggilan batch saat idle. */
 async function prefetch() {
   let calls = [];
-  if (S.role === 'Admin') calls = [{ action: 'usersList' }, { action: 'logs', data: { limit: 500 } }];
-  else if (S.role === 'Gadik' && S.boot.ref.kelas[0]) calls = [{ action: 'nilaiList', data: { idKelas: S.boot.ref.kelas[0].ID_Kelas } }];
-  else if (S.role === 'Pengasuh') calls = [{ action: 'mentalList' }];
+  if (S.role === 'Admin') calls = [{ action: 'usersList' }];
+  else if (S.role === 'Gadik') {
+    // Sesi mengajar hari ini → siapkan data input nilai harian
+    const t = todayStr();
+    if (S.boot.jadwal.some(j => j.ID_Gadik === S.me.ID_Gadik && j.Hari === hariOf(t))) calls = [{ action: 'nilaiHarian', data: { tanggal: t } }];
+  } else if (S.role === 'Pengasuh') calls = [{ action: 'mentalList' }];
   calls = calls.filter(c => {
-    const key = c.action === 'usersList' ? 'users' : c.action === 'logs' ? 'logs' : c.action === 'mentalList' ? 'mental' : 'nilai:' + c.data.idKelas;
+    const key = c.action === 'usersList' ? 'users' : c.action === 'mentalList' ? 'mental' : 'harian:' + c.data.tanggal;
     const cur = Store.get(uk(key), null);
     return !cur || Date.now() - cur.t > 60000;
   });
@@ -171,8 +175,7 @@ async function prefetch() {
   if (!res.success) return;
   const r = res.data;
   if (r.usersList && r.usersList.success) { cachePut('users', r.usersList.data); if (!S.data.users) S.data.users = r.usersList.data; }
-  if (r.logs && r.logs.success) cachePut('logs', r.logs.data);
-  if (r.nilaiList && r.nilaiList.success) cachePut('nilai:' + r.nilaiList.data.idKelas, r.nilaiList.data);
+  if (r.nilaiHarian && r.nilaiHarian.success) cachePut('harian:' + r.nilaiHarian.data.tanggal, r.nilaiHarian.data);
   if (r.mentalList && r.mentalList.success) cachePut('mental', r.mentalList.data);
 }
 

@@ -6,6 +6,7 @@
 
 const CFG = Object.assign({ GAS_URL: '', APP_NAME: 'SIPL — SPN Polda Papua Barat', IDLE_MINUTES: 60, TAHUN_AJARAN: '' }, window.SIPL_CONFIG || {});
 const GAS_URL = String(CFG.GAS_URL || '').trim();
+const FE_VERSION = '1.1.0';              // naikkan bersama ?v= di index.html saat rilis
 const LS = 'sipl:v1:';
 const TZ = 'Asia/Jayapura';
 const HARI = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
@@ -62,10 +63,10 @@ const Bus = {
 // --------------------------------------------------------------------------
 // Klien API (fetch → GAS /exec, text/plain agar tanpa CORS preflight)
 // --------------------------------------------------------------------------
-const READ_ACTIONS = /^(bootstrap|batch|publicInfo|nilaiList|mentalList|rekap|usersList|logs|importScan)$/;
+const READ_ACTIONS = /^(bootstrap|batch|publicInfo|nilaiHarian|mentalList|rekap|usersList|importScan)$/;
 
 function isConfigured() {
-  return /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]{10,}\/exec$/.test(GAS_URL);
+  return /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]{10,}\/exec$/.test(GAS_URL) && GAS_URL.indexOf('GANTI_DENGAN') === -1;
 }
 
 function rid() {
@@ -206,9 +207,24 @@ const fmt = {
     if (v === '' || v == null || isNaN(Number(v))) return '—';
     return Number(v).toLocaleString('id-ID', { minimumFractionDigits: dec == null ? 0 : dec, maximumFractionDigits: dec == null ? 2 : dec });
   },
-  jam(j) { return String(j || '').replace(':', '.'); }
+  jam(j) { return String(j || '').replace(':', '.'); },
+  /** "2026-10-12" → "12 Okt 2026" · {hari:true} → "Senin, 12 Okt 2026" · {short:true} → "12 Okt" */
+  tgl(t, o) {
+    const p = tglParts(t);
+    if (!p) return t || '—';
+    o = o || {};
+    return (o.hari ? hariOf(t) + ', ' : '') + p[2] + ' ' + BULAN[p[1] - 1] + (o.short ? '' : ' ' + p[0]);
+  }
 };
 function menit(jam) { const m = String(jam || '').match(/^(\d{1,2})[:.](\d{2})/); return m ? Number(m[1]) * 60 + Number(m[2]) : NaN; }
+// Tanggal kalender "yyyy-mm-dd" (zona WIT) untuk penilaian harian
+function todayStr() { const n = nowWIT(); return n.y + '-' + pad2(n.m) + '-' + pad2(n.d); }
+function tglParts(t) { const m = String(t || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? [+m[1], +m[2], +m[3]] : null; }
+function isTgl(t) { const p = tglParts(t); if (!p) return false; const d = new Date(Date.UTC(p[0], p[1] - 1, p[2])); return d.getUTCMonth() === p[1] - 1 && d.getUTCDate() === p[2]; }
+function addDays(t, n) { const p = tglParts(t), d = new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)); return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate()); }
+function hariOf(t) { const p = tglParts(t); return p ? HARI[(new Date(Date.UTC(p[0], p[1] - 1, p[2])).getUTCDay() + 6) % 7] : ''; }
+/** Tanggal terakhir (≤ dari) yang jatuh pada hari tertentu. */
+function lastDateOf(hari, from) { let t = from || todayStr(); for (let i = 0; i < 7; i++) { if (hariOf(t) === hari) return t; t = addDays(t, -1); } return t; }
 function avg(arr) { const a = arr.filter(v => v !== '' && v != null && !isNaN(Number(v))).map(Number); return a.length ? a.reduce((s, v) => s + v, 0) / a.length : null; }
 
 // --------------------------------------------------------------------------

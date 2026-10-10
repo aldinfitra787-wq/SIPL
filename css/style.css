@@ -263,13 +263,13 @@ p { margin: 0; }
 /* ---------- Notices ---------- */
 .notice { display: flex; gap: 14px; align-items: flex-start; padding: 16px 18px; border-radius: var(--r-card); background: var(--gold-t); border: 1px solid #F1E2B5; margin-bottom: 20px; }
 .notice .icon-tile { width: 40px; height: 40px; background: var(--gold); color: var(--ink); }
-.notice b { display: block; font-size: 14px; }
+.notice > div > b:first-child { display: block; font-size: 14px; }
 .notice p { color: #44403C; margin-top: 2px; font-size: 13.5px; }
 .notice.red { background: var(--red-t); border-color: var(--red-b); }
 .notice.red .icon-tile { background: var(--red); color: #fff; }
-.notice.red b { color: var(--red-h); }
+.notice.red > div > b:first-child { color: var(--red-h); }
 .notice.bur { background: linear-gradient(120deg, #5C1414, #6E1D1D); border: 0; color: #fff; }
-.notice.bur b { color: #fff; }
+.notice.bur > div > b:first-child { color: #fff; }
 .notice.bur p { color: rgba(255, 255, 255, .85); }
 .notice.bur .icon-tile { background: var(--gold); color: var(--ink); }
 .notice.slim { padding: 12px 14px; align-items: center; }
@@ -359,11 +359,11 @@ table.dt { width: 100%; border-collapse: separate; border-spacing: 0; font-size:
 .grade-cell .of { font: 500 12px/1 var(--mono); color: var(--faint); }
 .note-in { min-height: 40px; height: 40px; padding: 9px 12px; font-size: 13px; resize: vertical; }
 .note-in:focus { height: 84px; }
-.empty { text-align: center; padding: 48px 24px; color: var(--muted); }
-.empty .art { width: 72px; height: 72px; margin: 0 auto 14px; border-radius: 50%; background: var(--gold-t); color: var(--gold-d); display: grid; place-items: center; }
-.empty .art .ico { width: 32px; height: 32px; }
-.empty h3 { font-size: 16px; color: var(--ink); margin-bottom: 6px; }
-.empty p { max-width: 420px; margin: 0 auto 16px; }
+div.empty { text-align: center; padding: 48px 24px; color: var(--muted); }
+div.empty .art { width: 72px; height: 72px; margin: 0 auto 14px; border-radius: 50%; background: var(--gold-t); color: var(--gold-d); display: grid; place-items: center; }
+div.empty .art .ico { width: 32px; height: 32px; }
+div.empty h3 { font-size: 16px; color: var(--ink); margin-bottom: 6px; }
+div.empty p { max-width: 420px; margin: 0 auto 16px; }
 .sk { display: block; background: linear-gradient(90deg, #F2EBE4 25%, #F9F4EF 37%, #F2EBE4 63%); background-size: 400% 100%; animation: sk 1.3s ease infinite; border-radius: 6px; height: 14px; }
 @keyframes sk { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
 
@@ -513,6 +513,27 @@ table.dt { width: 100%; border-collapse: separate; border-spacing: 0; font-size:
 /* ==========================================================================
    Responsif
    ========================================================================== */
+/* ---------- Penilaian harian (tanggal → sesi → nilai → kirim ke rekap) ---------- */
+.step-no { width: 30px; height: 30px; flex: none; border-radius: 8px; background: var(--gold); color: var(--ink); display: grid; place-items: center; font: 700 13px/1 var(--mono); }
+.nh-date { display: flex; align-items: center; gap: 6px; }
+.nh-date .input { width: 170px; height: 38px; }
+.sesi-cards { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.sesi-card { display: flex; flex-direction: column; gap: 4px; }
+.sesi-card .sc-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.sesi-card .time { font: 600 12px/1 var(--mono); color: var(--muted); }
+.sesi-card strong { margin-top: 4px; }
+.sesi-card.done:not(.checked) { background: #FAFDF9; }
+.sesi-card .sc-pend { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #92400E; margin-top: 6px; }
+.draf-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.draf-list .btn { background: #fff; max-width: 100%; height: auto; min-height: 28px; padding-top: 5px; padding-bottom: 5px; white-space: normal; text-align: left; }
+.sess-act { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex: none; }
+.grade-in:disabled { background: var(--surface-2); color: var(--ink); -webkit-text-fill-color: var(--ink); opacity: 1; cursor: default; }
+.rekap td .cnt { display: block; font: 500 10px/1.2 var(--mono); color: var(--faint); margin-top: 2px; }
+.day-vals { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.day-vals span { display: inline-flex; flex-direction: column; align-items: center; min-width: 52px; padding: 4px 8px; border-radius: 6px; background: var(--surface-2); font: 600 12.5px/1.25 var(--mono); }
+.day-vals small { font: 500 10px/1.2 var(--mono); color: var(--faint); }
+a.chip { text-decoration: none; }
+
 @media (max-width: 1200px) {
   .grid.c4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -555,6 +576,13 @@ table.dt { width: 100%; border-collapse: separate; border-spacing: 0; font-size:
   .sticky-bar .btn { flex: 1 1 auto; }
   .session { align-items: flex-start; padding: 14px; }
   .session .no { width: 52px; }
+  .session { flex-wrap: wrap; }
+  .session .sess-act { width: 100%; flex-direction: row; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px dashed var(--border); }
+  table.dt.cards td.m-hide { display: none; }
+  .nh-date { flex: 1 1 100%; }
+  .nh-date .input { flex: 1; width: auto; }
+  .card-head .seg { flex: 1 1 100%; }
+  .card-head .seg button { flex: 1; justify-content: center; }
   .toasts { left: 10px; right: 10px; bottom: 10px; max-width: none; }
 
   /* Tabel → kartu */
