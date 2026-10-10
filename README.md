@@ -1,4 +1,4 @@
-# SIPL — SPN Polda Papua Barat (Frontend) • v1.3.0
+# SIPL — SPN Polda Papua Barat (Frontend) • v1.3.1
 
 Tampilan web **Sistem Informasi Pelatihan** untuk Admin Satdik, Gadik, dan Pengasuh.
 Berkas statis (HTML/CSS/JS murni, tanpa framework) yang di-hosting di GitHub Pages dan terhubung ke backend Google Apps Script.

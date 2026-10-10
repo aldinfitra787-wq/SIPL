@@ -641,6 +641,15 @@ function lembarLegend() {
     PENILAIAN.ASPEK.map(g => '<span class="chip line">' + esc(g.nama) + ' ' + g.butir.join('·') + ' • ' + Math.round(g.bobot * 100) + '%</span>').join('') + '</div>';
 }
 
+/** Data rekap format v1.2+ (sesi = daftar, nilai per sesi = butir A1–C2). */
+function rekapValid(d) { return !!d && Array.isArray(d.sesi) && !!d.nilai && typeof d.nilai === 'object'; }
+
+/** Data nilai harian format v1.2+ (cache dari versi lama diabaikan & diambil ulang). */
+function harianValid(d) {
+  if (!d || typeof d.sesi !== 'object' || typeof d.nilai !== 'object' || !d.sesi || !d.nilai) return false;
+  return Object.keys(d.nilai).every(j => Object.keys(d.nilai[j] || {}).every(p => Array.isArray(d.nilai[j][p]) && Array.isArray(d.nilai[j][p][0])));
+}
+
 const NilaiPage = (() => {
   const st = { tgl: '', jid: '', pel: '', status: '', q: '' };
   const savers = {}, bad = {};
@@ -649,9 +658,9 @@ const NilaiPage = (() => {
   const key = (t, j) => 'draft:nilai:' + t + ':' + j;
   const J = id => S.boot.jadwal.find(j => j.ID_Jadwal === id);
   const day = () => (S.data.harian || {})[st.tgl];
-  const sesi = () => { const d = day(); return d && st.jid ? d.sesi[st.jid] || null : null; };
+  const sesi = () => { const d = day(); return d && st.jid && d.sesi ? d.sesi[st.jid] || null : null; };
   const locked = () => { const s = sesi(); return !!(s && s.Status === 'Selesai'); };
-  const savedOf = pid => { const d = day(), m = d && d.nilai[st.jid]; return m ? m[pid] || null : null; };
+  const savedOf = pid => { const d = day(), m = d && d.nilai && d.nilai[st.jid]; return m ? m[pid] || null : null; };
   const peserta = () => { const j = J(st.jid); return j ? S.boot.peserta.filter(p => p.ID_Kelas === j.ID_Kelas) : []; };
 
   /** Sesi yang diajar Gadik ini pada tanggal tsb (urut jam). Daftar server dipakai bila sudah dimuat. */
@@ -754,6 +763,7 @@ const NilaiPage = (() => {
       onSaved: res => {
         const d = (S.data.harian || {})[tgl];
         if (d) {
+          d.nilai = d.nilai || {}; d.sesi = d.sesi || {};
           const m = d.nilai[jid] = d.nilai[jid] || {};
           res.data.saved.forEach(s => { if (s.nilai === '') delete m[s.id]; else m[s.id] = [s.v, s.waktu, S.me.Nama_Lengkap]; });
           if (res.data.sesi) d.sesi[jid] = Object.assign({}, d.sesi[jid] || {}, res.data.sesi);
@@ -795,7 +805,7 @@ const NilaiPage = (() => {
       return;
     }
     host.innerHTML = '<div class="radio-cards sesi-cards" role="radiogroup" aria-label="Sesi mengajar">' + list.map(j => {
-      const on = j.ID_Jadwal === st.jid, s = d ? d.sesi[j.ID_Jadwal] : null, total = pesertaCount(j.ID_Kelas);
+      const on = j.ID_Jadwal === st.jid, s = d && d.sesi ? d.sesi[j.ID_Jadwal] : null, total = pesertaCount(j.ID_Kelas);
       const done = !!(s && s.Status === 'Selesai');
       const sv = savers[key(st.tgl, j.ID_Jadwal)];
       const pend = done ? 0 : sv ? sv.count() : Object.keys(Store.get(uk(key(st.tgl, j.ID_Jadwal)), null) || {}).length;
@@ -1056,7 +1066,7 @@ const NilaiPage = (() => {
       return;
     }
     const d = (S.data.harian || {})[tgl];
-    if (d) { d.sesi[jid] = res.data.sesi; cachePut('harian:' + tgl, d); }
+    if (d) { d.sesi = d.sesi || {}; d.sesi[jid] = res.data.sesi; cachePut('harian:' + tgl, d); }
     sesiStatUpdate(res.data.sesi);
     toast('Nilai terkirim ke rekap', mapelName(j.ID_Mapel) + ' • ' + kelasName(j.ID_Kelas) + ' • ' + res.data.sesi.Jumlah + ' peserta. Nilai sesi ini kini terkunci.');
     if (st.tgl === tgl && st.jid === jid) { useSaver(); renderSesi(); renderDraf(); renderHead(); refreshTable(true); }
@@ -1080,7 +1090,7 @@ const NilaiPage = (() => {
       else if (typing) { shown.forEach(updateRow); renderHead(); }
       else if (st.jid) { renderHead(); refreshTable(true); }
     }, {
-      fresh: force ? 0 : 20000, force,
+      fresh: force ? 0 : 20000, force, valid: harianValid,
       onError: res => { loadErr = res.message; if (el && st.tgl === tgl) { renderSesi(); refreshTable(); } }
     });
     if (!day()) { renderSesi(); refreshTable(); }
@@ -1124,7 +1134,7 @@ const RekapAkhirPage = (() => {
     swr('rekap:' + k, 'rekap', { idKelas: k }, d => {
       S.data.rekap[k] = d;
       if (el && !el.hidden && st.kelas === k && !_modals.length) fill();
-    }, { fresh: force ? 0 : 5000, force, onError: res => { err = res.message; if (st.kelas === k) fill(); } });
+    }, { valid: rekapValid, fresh: force ? 0 : 5000, force, onError: res => { err = res.message; if (st.kelas === k) fill(); } });
   }
 
   function renderList() {

@@ -1,6 +1,6 @@
 # Panduan Instalasi SIPL — SPN Polda Papua Barat
 
-**Sistem Informasi Pelatihan** • Versi 1.3.0
+**Sistem Informasi Pelatihan** • Versi 1.3.1 (tampilan) • 1.3.0 (server)
 
 > **Sudah memasang versi 1.0, 1.1, atau 1.2?** Langsung ke **Bagian G — Memperbarui Versi**. Data Anda tetap aman dan database diperbarui otomatis.
 
@@ -414,6 +414,8 @@ Cadangan otomatis tersimpan di folder **Cadangan Harian** (14 salinan terakhir).
 | Gadik: "Tidak ada sesi Anda pada hari …" | belum ada jadwal Gadik itu pada hari tersebut | Admin menambah sesi di **Jadwal Pelajaran**, lalu Gadik muat ulang halaman |
 | Nilai sudah diisi tetapi tidak muncul di Rekap | sesi masih **Draf** | Gadik menekan **Selesai & Kirim ke Rekap** (lihat daftar sesi di Rekap Harian) |
 | "Versi aplikasi di perangkat Anda sudah usang" | tampilan lama masih terbuka setelah pembaruan | tekan **Ctrl + Shift + R** (HP: tutup & buka lagi), lalu isi ulang baris itu |
+| Console: `Cannot read properties of undefined (reading 'JDW-…')`, lembar nilai tidak tampil | data lama dari versi sebelumnya tersimpan di browser | sudah diperbaiki di tampilan **1.3.1** (data lama diabaikan & diambil ulang otomatis). Pasang ZIP terbaru, lalu **Ctrl + Shift + R** |
+| Muncul "Server belum diperbarui" (Admin) | `Kode.gs` di Apps Script lebih lama dari tampilan | tempel `Kode.gs` & `Migrasi.gs` terbaru → **Terapkan → Kelola deployment → Edit → Versi baru** |
 | Tombol Unduh tidak menghasilkan berkas | koneksi terputus saat modul unduh pertama kali dimuat | periksa koneksi lalu tekan lagi |
 | Gadik tidak bisa mengubah nilai | sesi sudah dikirim & terkunci | Admin: Rekap → Sesi Penilaian → **Buka kunci** |
 | Mapel jadwal tidak bisa diganti | sesi itu sudah punya nilai harian | ubah jam/hari/Gadik saja, buat sesi jadwal baru, atau hapus jadwalnya (nilainya ikut terhapus) |

@@ -904,7 +904,7 @@ const RekapPage = (() => {
     const kelas = st.kelas;
     S.data.rekap = S.data.rekap || {};
     swr('rekap:' + kelas, 'rekap', { idKelas: kelas }, d => { S.data.rekap[kelas] = d; if (st.kelas === kelas && el && !el.hidden && !_modals.length) fill(); },
-      { fresh: force ? 0 : 5000, force, onError: res => { err = res.message; if (st.kelas === kelas) fill(); } });
+      { valid: rekapValid, fresh: force ? 0 : 5000, force, onError: res => { err = res.message; if (st.kelas === kelas) fill(); } });
   }
 
   return {

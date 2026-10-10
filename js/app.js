@@ -112,7 +112,7 @@ async function doLogin(e) {
   Store.set('session', { token: S.token, uid: S.uid, role: S.role, t: Date.now(), act: Date.now() });
   pass.value = '';
   lastAct = Date.now();
-  startApp(boot);
+  startApp(boot); S._versiCek = true; setTimeout(cekVersiServer, 1500);
 }
 
 // --------------------------------------------------------------------------
@@ -177,6 +177,18 @@ async function revalidate() {
   S.boot = res.data; S.me = res.data.me;
   if (roleChanged) { Store.set('session', Object.assign(Store.get('session', {}), { role: S.me.Role })); location.reload(); return; }
   bootChanged(); fillUser(); applyBranding();
+  if (!S._versiCek) { S._versiCek = true; cekVersiServer(); }
+}
+
+/** Peringatkan bila backend (Kode.gs) lebih lama dari tampilan — penyebab umum error setelah pembaruan. */
+function cekVersiServer() {
+  const sv = String((S.boot && S.boot.settings && S.boot.settings.version) || ''), num = v => v.split('.').slice(0, 2).map(Number);
+  if (!sv) return;
+  const [a, b] = num(sv), [c, d] = num(FE_VERSION);
+  if (a < c || (a === c && b < d)) {
+    console.warn('Server SIPL ' + sv + ' lebih lama dari tampilan ' + FE_VERSION);
+    if (S.role === 'Admin') toast('Server belum diperbarui', 'Server masih versi ' + sv + ', tampilan versi ' + FE_VERSION + '. Tempel Kode.gs & Migrasi.gs terbaru di Apps Script lalu Terapkan → Kelola deployment → Edit → Versi baru.', 'warning');
+  }
 }
 
 /** Prefetch data menu yang sering dibuka dalam SATU panggilan batch saat idle. */
@@ -198,7 +210,7 @@ async function prefetch() {
   if (!res.success) return;
   const r = res.data;
   if (r.usersList && r.usersList.success) { cachePut('users', r.usersList.data); if (!S.data.users) S.data.users = r.usersList.data; }
-  if (r.nilaiHarian && r.nilaiHarian.success) cachePut('harian:' + r.nilaiHarian.data.tanggal, r.nilaiHarian.data);
+  if (r.nilaiHarian && r.nilaiHarian.success && harianValid(r.nilaiHarian.data)) cachePut('harian:' + r.nilaiHarian.data.tanggal, r.nilaiHarian.data);
   if (r.mentalList && r.mentalList.success) cachePut('mental', r.mentalList.data);
 }
 
@@ -288,7 +300,7 @@ window.addEventListener('offline', () => { updateNet(); toast('Koneksi terputus'
     revalidate();              // lalu segarkan di latar
   } else {
     api('bootstrap', {}).then(res => {
-      if (res.success) startApp(res.data);
+      if (res.success) { startApp(res.data); S._versiCek = true; setTimeout(cekVersiServer, 1500); }
       else if (res.code !== 'AUTH') showLogin(res.message);
     });
   }

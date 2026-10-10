@@ -6,7 +6,7 @@
 
 const CFG = Object.assign({ GAS_URL: '', APP_NAME: 'SIPL — SPN Polda Papua Barat', IDLE_MINUTES: 60, TAHUN_AJARAN: '' }, window.SIPL_CONFIG || {});
 const GAS_URL = String(CFG.GAS_URL || '').trim();
-const FE_VERSION = '1.3.0';              // naikkan bersama ?v= di index.html saat rilis
+const FE_VERSION = '1.3.1';              // naikkan bersama ?v= di index.html saat rilis
 const LS = 'sipl:v1:';
 const TZ = 'Asia/Jayapura';
 const HARI = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
@@ -154,8 +154,12 @@ async function fetchPublicInfo() {
 async function swr(key, action, payload, render, opt) {
   opt = opt || {};
   const fresh = opt.fresh == null ? 60000 : opt.fresh;
-  const c = Store.get(uk(key), null);
-  if (c) render(c.data, true);
+  let c = Store.get(uk(key), null);
+  if (c && (!c.data || typeof c.data !== 'object' || (opt.valid && !opt.valid(c.data)))) { Store.del(uk(key)); c = null; }   // cache format lama
+  if (c) {
+    try { render(c.data, true); }
+    catch (e) { console.warn('Cache ' + key + ' diabaikan:', e); Store.del(uk(key)); c = null; }   // jangan sampai cache rusak menghentikan pemuatan
+  }
   if (c && !opt.force && Date.now() - c.t < fresh) return { success: true, data: c.data, cached: true };
   const res = await api(action, payload);
   if (res.success) {
