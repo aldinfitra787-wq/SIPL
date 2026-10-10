@@ -521,37 +521,39 @@ const MasterPage = (() => {
 page('master', MasterPage);
 
 // ==========================================================================
-// JADWAL — Admin: matriks mingguan + daftar + deteksi bentrok (US-07)
+// JADWAL — Admin: 1 mapel = blok 6 hari (Senin–Sabtu, 08.00–17.00) • matriks per pekan + daftar + bentrok
 // ==========================================================================
 window.JadwalAdmin = (() => {
-  const st = { kelas: '', view: 'matrix', fGadik: '', fHari: '', fKelas: '' };
+  const st = { kelas: '', view: 'matrix', fGadik: '', fKelas: '', fWaktu: 'aktif', wk: '' };
   let el, table;
+  const senin = t => addDays(t, -HARI.indexOf(hariOf(t)));
 
   function render() {
     const kel = kelasList(), all = S.boot.jadwal, conf = findConflicts(all);
     if (!kel.some(k => k.ID_Kelas === st.kelas)) st.kelas = kel[0] ? kel[0].ID_Kelas : '';
+    if (!st.wk) st.wk = senin(todayStr());
     const pairs = [], seen = {};
     Object.keys(conf).forEach(a => conf[a].forEach(c => { const k = [a, c.id].sort().join('|'); if (!seen[k]) { seen[k] = 1; pairs.push({ a, b: c.id, why: c.why }); } }));
     const J = id => all.find(j => j.ID_Jadwal === id) || {};
     el.innerHTML =
       pageHead({
-        eyebrow: 'Kurikulum & Matriks // Deteksi Bentrok Otomatis',
+        eyebrow: 'Kurikulum & Matriks // 1 Mapel = 6 Hari • 08.00–17.00 WIT',
         title: 'Jadwal Pelajaran',
-        desc: 'Atur jadwal per kelas: mata pelajaran, Gadik pengajar, hari, jam, dan ruang. Sistem memperingatkan bila Gadik atau kelas yang sama dijadwalkan pada jam yang sama.',
+        desc: 'Satu mata pelajaran dilaksanakan <b>6 hari (Senin–Sabtu)</b> pukul <b>08.00–17.00 WIT</b>. Pilih tanggal mulai; tanggal selesai terisi otomatis. Bila penutupan dimajukan ke Jumat, centang opsinya agar Gadik dapat mengisi nilai hari Sabtu sejak Jumat.',
         actions: '<div class="seg" role="tablist"><button data-view="matrix" class="' + (st.view === 'matrix' ? 'on' : '') + '">' + icon('grid', 'sm') + 'Matriks</button><button data-view="list" class="' + (st.view === 'list' ? 'on' : '') + '">' + icon('list', 'sm') + 'Daftar</button></div>' +
-          '<button class="btn primary" id="jd-add">' + icon('plus') + 'Tambah Jadwal</button>'
+          '<button class="btn primary" id="jd-add">' + icon('plus') + 'Tambah Jadwal Mapel</button>'
       }) +
       (pairs.length ? '<div class="notice red"><div class="icon-tile">' + icon('alert-triangle') + '</div><div class="grow"><b>' + pairs.length + ' bentrok jadwal terdeteksi</b>' +
-        pairs.slice(0, 4).map(p => { const a = J(p.a), b = J(p.b); return '<p>' + (p.why === 'GADIK' ? 'Gadik <b>' + esc(gadikName(a.ID_Gadik)) + '</b> mengajar ' + esc(kelasName(a.ID_Kelas)) + ' dan ' + esc(kelasName(b.ID_Kelas)) : '<b>' + esc(kelasName(a.ID_Kelas)) + '</b>: ' + esc(mapelName(a.ID_Mapel)) + ' dan ' + esc(mapelName(b.ID_Mapel))) + ' pada ' + esc(a.Hari) + ' ' + esc(fmt.jam(a.Jam_Mulai)) + '–' + esc(fmt.jam(a.Jam_Selesai)) + ' <a href="javascript:void 0" data-open="' + esc(p.a) + '">Selesaikan →</a></p>'; }).join('') +
+        pairs.slice(0, 4).map(p => { const a = J(p.a), b = J(p.b); return '<p>' + (p.why === 'GADIK' ? 'Gadik <b>' + esc(gadikName(a.ID_Gadik)) + '</b> mengajar ' + esc(kelasName(a.ID_Kelas)) + ' dan ' + esc(kelasName(b.ID_Kelas)) : '<b>' + esc(kelasName(a.ID_Kelas)) + '</b>: ' + esc(mapelName(a.ID_Mapel)) + ' dan ' + esc(mapelName(b.ID_Mapel))) + ' pada ' + esc(rentangJadwal(a)) + ' ' + esc(fmt.jam(a.Jam_Mulai)) + '–' + esc(fmt.jam(a.Jam_Selesai)) + ' <a href="javascript:void 0" data-open="' + esc(p.a) + '">Selesaikan →</a></p>'; }).join('') +
         (pairs.length > 4 ? '<p>dan ' + (pairs.length - 4) + ' bentrok lainnya (lihat tampilan Daftar).</p>' : '') + '</div></div>' : '') +
       '<div class="card">' + (st.view === 'matrix' ? matrixHtml(kel, conf) : '<div class="toolbar">' +
         '<div class="field"><label>Kelas</label><select class="select" id="jl-kelas">' + options(kel, 'ID_Kelas', k => k.Nama_Kelas + ' — ' + k.Nama_Angkatan, st.fKelas, 'Semua kelas') + '</select></div>' +
         '<div class="field"><label>Gadik</label><select class="select" id="jl-gadik">' + options(S.boot.ref.gadik.slice().sort((a, b) => collator.compare(a.Nama_Lengkap, b.Nama_Lengkap)), 'ID_Gadik', g => g.Nama_Lengkap, st.fGadik, 'Semua Gadik') + '</select></div>' +
-        '<div class="field narrow"><label>Hari</label><select class="select" id="jl-hari"><option value="">Semua hari</option>' + HARI.map(h => '<option' + (st.fHari === h ? ' selected' : '') + '>' + h + '</option>').join('') + '</select></div>' +
+        '<div class="field narrow"><label>Waktu</label><select class="select" id="jl-waktu">' + [['aktif', 'Berjalan & akan datang'], ['', 'Semua'], ['lalu', 'Sudah selesai']].map(o => '<option value="' + o[0] + '"' + (st.fWaktu === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></div>' +
         '</div><div id="jl-table"></div>') + '</div>';
 
     $$('[data-view]', el).forEach(b => { b.onclick = () => { st.view = b.dataset.view; render(); }; });
-    $('#jd-add', el).onclick = () => openForm(null, { ID_Kelas: st.view === 'matrix' ? st.kelas : st.fKelas });
+    $('#jd-add', el).onclick = () => openForm(null, { ID_Kelas: st.view === 'matrix' ? st.kelas : st.fKelas, Tanggal_Mulai: st.view === 'matrix' && st.wk > todayStr() ? st.wk : '' });
     el.addEventListener('click', onClick);
     if (st.view === 'matrix') {
       const ks = $('#jm-kelas', el);
@@ -559,19 +561,19 @@ window.JadwalAdmin = (() => {
     } else {
       $('#jl-kelas', el).onchange = e => { st.fKelas = e.target.value; fillList(conf); };
       $('#jl-gadik', el).onchange = e => { st.fGadik = e.target.value; fillList(conf); };
-      $('#jl-hari', el).onchange = e => { st.fHari = e.target.value; fillList(conf); };
+      $('#jl-waktu', el).onchange = e => { st.fWaktu = e.target.value; fillList(conf); };
       table = new Table($('#jl-table', el), {
-        key: 'ID_Jadwal', unit: 'sesi', pageSize: 25, sort: { key: 'Hari', dir: 'asc' },
+        key: 'ID_Jadwal', unit: 'jadwal', pageSize: 25, sort: { key: 'tgl', dir: 'asc' },
         columns: [
-          { key: 'Hari', label: 'Hari', sort: j => HARI.indexOf(j.Hari) * 2000 + menit(j.Jam_Mulai), render: j => '<b>' + esc(j.Hari) + '</b>' },
-          { key: 'jam', label: 'Jam (WIT)', sort: j => menit(j.Jam_Mulai), render: j => '<span class="mono">' + esc(fmt.jam(j.Jam_Mulai)) + '–' + esc(fmt.jam(j.Jam_Selesai)) + '</span>' },
+          { key: 'tgl', label: 'Pelaksanaan', sort: j => (j.Tanggal_Mulai || '0000') + HARI.indexOf(hariList(j)[0]), render: j => '<b class="nowrap">' + esc(j.Tanggal_Mulai ? rentangJadwal(j).split(' • ')[0] : 'Setiap pekan') + '</b><div class="small muted">' + esc(hariTeks(j)) + (j.Tutup_Jumat === 'Ya' ? ' • <span class="badge draft">Penutupan Jumat</span>' : '') + '</div>' },
+          { key: 'jam', label: 'Jam (WIT)', sort: j => menit(j.Jam_Mulai), render: j => '<span class="mono nowrap">' + esc(fmt.jam(j.Jam_Mulai)) + '–' + esc(fmt.jam(j.Jam_Selesai)) + '</span>' },
           { key: 'mapel', label: 'Mata Pelajaran', cls: 'card-title', sort: j => mapelName(j.ID_Mapel), render: j => '<div class="t-name"><b>' + esc(mapelName(j.ID_Mapel)) + '</b><small>' + esc(kelasName(j.ID_Kelas, true)) + '</small></div>' },
           { key: 'gadik', label: 'Gadik', sort: j => gadikName(j.ID_Gadik), render: j => esc(gadikName(j.ID_Gadik)) },
           { key: 'Ruang', label: 'Ruang', render: j => esc(j.Ruang || '—') },
-          { key: 'st', label: 'Status', sort: j => conf[j.ID_Jadwal] ? 0 : 1, render: j => conf[j.ID_Jadwal] ? '<span class="badge bad">Bentrok</span>' : '<span class="badge ok">OK</span>' },
+          { key: 'st', label: 'Status', sort: j => conf[j.ID_Jadwal] ? 0 : 1, render: j => conf[j.ID_Jadwal] ? '<span class="badge bad">Bentrok</span>' : (!j.Tanggal_Mulai ? '<span class="badge off">Format lama</span>' : j.Tanggal_Selesai < todayStr() ? '<span class="badge off">Selesai</span>' : j.Tanggal_Mulai > todayStr() ? '<span class="badge draft">Akan datang</span>' : '<span class="badge ok">Berjalan</span>') },
           { key: 'acts', label: 'Aksi', sort: false, cls: 'acts-cell', render: () => '<div class="acts"><button class="btn icon" data-act="edit" title="Ubah">' + icon('edit') + '</button><button class="btn icon red" data-act="del" title="Hapus">' + icon('trash') + '</button></div>' }
         ],
-        empty: () => emptyState('calendar', 'Belum ada jadwal', 'Tambahkan sesi pelajaran pertama.', '<button class="btn primary" data-act="add">' + icon('plus') + 'Tambah Jadwal</button>'),
+        empty: () => emptyState('calendar', 'Belum ada jadwal', 'Tambahkan jadwal mata pelajaran pertama (6 hari, 08.00–17.00).', '<button class="btn primary" data-act="add">' + icon('plus') + 'Tambah Jadwal Mapel</button>'),
         onAction: (act, id) => {
           if (act === 'add') return openForm(null, {});
           const j = S.boot.jadwal.find(x => x.ID_Jadwal === id);
@@ -583,86 +585,133 @@ window.JadwalAdmin = (() => {
     }
   }
 
-  function fillList(conf) {
-    table.set(S.boot.jadwal.filter(j => (!st.fKelas || j.ID_Kelas === st.fKelas) && (!st.fGadik || j.ID_Gadik === st.fGadik) && (!st.fHari || j.Hari === st.fHari)));
+  function fillList() {
+    const t = todayStr();
+    table.set(S.boot.jadwal.filter(j => (!st.fKelas || j.ID_Kelas === st.fKelas) && (!st.fGadik || j.ID_Gadik === st.fGadik) &&
+      (!st.fWaktu || (st.fWaktu === 'aktif' ? !j.Tanggal_Selesai || j.Tanggal_Selesai >= t : !!j.Tanggal_Selesai && j.Tanggal_Selesai < t))));
   }
 
   function matrixHtml(kel, conf) {
     if (!kel.length) return emptyState('building', 'Belum ada kelas', 'Tambahkan angkatan & kelas di menu Master Data terlebih dahulu.', '<a class="btn primary" href="#/master/kelas">Buka Master Data</a>');
-    const list = S.boot.jadwal.filter(j => j.ID_Kelas === st.kelas);
-    const days = HARI.filter((h, i) => i < 6 || list.some(j => j.Hari === h));
+    const dates = HARI.map((h, i) => addDays(st.wk, i));
+    const kList = S.boot.jadwal.filter(j => j.ID_Kelas === st.kelas);
+    const list = kList.filter(j => dates.some(t => jadwalAktif(j, t)));
+    const days = dates.filter((t, i) => i < 6 || list.some(j => jadwalAktif(j, t)));
     const slots = Array.from(new Set(list.map(j => j.Jam_Mulai + '|' + j.Jam_Selesai))).sort((a, b) => menit(a) - menit(b.split('|')[0]) || menit(a.split('|')[1]) - menit(b.split('|')[1]));
-    const now = nowWIT();
-    const totalMin = list.reduce((s, j) => s + Math.max(0, menit(j.Jam_Selesai) - menit(j.Jam_Mulai)), 0);
-    let h = '<div class="card-head"><div class="field" style="min-width:260px"><label for="jm-kelas">Kelas</label><select id="jm-kelas" class="select">' + options(kel, 'ID_Kelas', k => k.Nama_Kelas + ' — ' + k.Nama_Angkatan, st.kelas) + '</select></div>' +
-      '<span class="grow"></span><span class="chip line">' + list.length + ' sesi • ' + fmt.num(totalMin / 60, totalMin % 60 ? 1 : 0) + ' jam/pekan</span>' +
+    const today = todayStr();
+    const mapels = Array.from(new Set(list.map(j => j.ID_Mapel)));
+    let h = '<div class="card-head" style="flex-wrap:wrap"><div class="field" style="min-width:240px"><label for="jm-kelas">Kelas</label><select id="jm-kelas" class="select">' + options(kel, 'ID_Kelas', k => k.Nama_Kelas + ' — ' + k.Nama_Angkatan, st.kelas) + '</select></div>' +
+      '<div class="wk-nav"><button class="btn icon" data-wk="-7" title="Pekan sebelumnya" aria-label="Pekan sebelumnya">' + icon('chevron-left') + '</button>' +
+      '<div class="wk-t"><b>' + esc(tglRingkas(dates[0]) + ' – ' + tglRingkas(dates[5])) + '</b><small>' + (st.wk === senin(today) ? 'Pekan ini' : 'Pekan ' + esc(tglRingkas(st.wk))) + '</small></div>' +
+      '<button class="btn icon" data-wk="7" title="Pekan berikutnya" aria-label="Pekan berikutnya">' + icon('chevron-right') + '</button>' +
+      (st.wk !== senin(today) ? '<button class="btn outline xs" data-wk="0">Pekan ini</button>' : '') + '</div>' +
+      '<span class="grow"></span><span class="chip line">' + (mapels.length ? esc(mapels.map(mapelName).join(', ')) : 'Belum ada mapel pekan ini') + '</span>' +
       '<span class="chip red">' + icon('alert-triangle', 'sm') + 'Merah = bentrok</span></div>';
-    if (!slots.length) return h + '<div class="card-body">' + emptyState('calendar', 'Jadwal kelas ini masih kosong', 'Tambahkan sesi pertama untuk ' + kelasName(st.kelas, true) + '.', '<button class="btn primary" data-add="Senin|07:30|09:30">' + icon('plus') + 'Tambah Sesi</button>') + '</div>';
-    h += '<div class="matrix-wrap"><div class="matrix" style="grid-template-columns:110px repeat(' + days.length + ',minmax(160px,1fr))">';
-    h += '<div class="mh">Waktu</div>' + days.map(d => '<div class="mh' + (d === now.hari ? ' today' : '') + '">' + d + (d === now.hari ? ' • hari ini' : '') + '</div>').join('');
-    slots.forEach(s => {
-      const [a, b] = s.split('|'), dur = menit(b) - menit(a);
-      h += '<div class="mt">' + esc(fmt.jam(a)) + '–' + esc(fmt.jam(b)) + '<small>' + dur + ' menit</small></div>';
-      days.forEach(d => {
-        const cell = list.filter(j => j.Hari === d && j.Jam_Mulai === a && j.Jam_Selesai === b);
-        h += '<div class="mc' + (d === now.hari ? ' today' : '') + '">' + cell.map(j => {
-          const c = conf[j.ID_Jadwal];
-          return '<button class="slot' + (c ? ' clash' : '') + '" data-open="' + esc(j.ID_Jadwal) + '"><span class="code">' + (c ? '⚠ BENTROK ' + (c[0].why === 'GADIK' ? 'GADIK' : 'KELAS') : esc(j.ID_Mapel)) + '</span><b>' + esc(mapelName(j.ID_Mapel)) + '</b><small>' + icon('user', 'sm') + esc(gadikName(j.ID_Gadik)) + '</small>' + (j.Ruang ? '<small>' + icon('map-pin', 'sm') + esc(j.Ruang) + '</small>' : '') + '</button>';
-        }).join('') + '<button class="add-slot" data-add="' + d + '|' + a + '|' + b + '" title="Tambah sesi">+</button></div>';
+    if (!slots.length) {
+      const next = kList.filter(j => j.Tanggal_Mulai && j.Tanggal_Mulai > dates[6]).sort((a, b) => a.Tanggal_Mulai.localeCompare(b.Tanggal_Mulai))[0];
+      return h + '<div class="card-body">' + emptyState('calendar', 'Belum ada mata pelajaran pada pekan ini', kelasName(st.kelas, true) + (next ? ' — jadwal berikutnya: ' + mapelName(next.ID_Mapel) + ', ' + rentangJadwal(next) + '.' : '.'),
+        '<button class="btn primary" data-add-wk="1">' + icon('plus') + 'Jadwalkan Mapel Pekan Ini</button>' + (next ? ' <button class="btn outline" data-goto-wk="' + senin(next.Tanggal_Mulai) + '">Lihat pekan itu</button>' : '')) + '</div>';
+    }
+    h += '<div class="matrix-wrap"><div class="matrix" style="grid-template-columns:110px repeat(' + days.length + ',minmax(150px,1fr))">';
+    h += '<div class="mh">Waktu</div>' + days.map(t => '<div class="mh' + (t === today ? ' today' : '') + '">' + hariOf(t) + '<small>' + esc(tglRingkas(t)) + (t === today ? ' • hari ini' : '') + '</small></div>').join('');
+    slots.forEach(sl => {
+      const [a, b] = sl.split('|'), dur = menit(b) - menit(a);
+      h += '<div class="mt">' + esc(fmt.jam(a)) + '–' + esc(fmt.jam(b)) + '<small>' + fmt.num(dur / 60, dur % 60 ? 1 : 0) + ' jam</small></div>';
+      days.forEach(t => {
+        const cell = list.filter(j => jadwalAktif(j, t) && j.Jam_Mulai === a && j.Jam_Selesai === b);
+        h += '<div class="mc' + (t === today ? ' today' : '') + '">' + cell.map(j => {
+          const c = conf[j.ID_Jadwal], ke = tanggalJadwal(j).indexOf(t) + 1, sabtuAwal = j.Tutup_Jumat === 'Ya' && hariOf(t) === 'Sabtu';
+          return '<button class="slot' + (c ? ' clash' : '') + '" data-open="' + esc(j.ID_Jadwal) + '"><span class="code">' + (c ? '⚠ BENTROK ' + (c[0].why === 'GADIK' ? 'GADIK' : 'KELAS') + (ke ? ' • HARI ' + ke : '') : (ke ? 'HARI ' + ke : 'MINGGUAN')) + '</span><b>' + esc(mapelName(j.ID_Mapel)) + '</b><small>' + icon('user', 'sm') + esc(gadikName(j.ID_Gadik)) + '</small>' + (j.Ruang ? '<small>' + icon('map-pin', 'sm') + esc(j.Ruang) + '</small>' : '') + (sabtuAwal ? '<small class="slot-note">Penutupan Jumat — nilai diisi Jumat</small>' : '') + '</button>';
+        }).join('') + '</div>';
       });
     });
-    return h + '</div></div><div class="pager"><span>' + icon('info', 'sm') + ' Klik sesi untuk mengubah. Arahkan kursor ke sel kosong lalu klik <b>+</b> untuk menambah sesi pada jam tersebut.</span></div>';
+    return h + '</div></div><div class="pager"><span>' + icon('info', 'sm') + ' Klik mata pelajaran untuk mengubah. Gunakan ◀ ▶ untuk berpindah pekan.</span></div>';
   }
 
   function onClick(e) {
     const o = e.target.closest('[data-open]');
     if (o) { e.preventDefault(); const j = S.boot.jadwal.find(x => x.ID_Jadwal === o.dataset.open); if (j) openForm(j); return; }
-    const a = e.target.closest('[data-add]');
-    if (a) { const [Hari, Jam_Mulai, Jam_Selesai] = a.dataset.add.split('|'); openForm(null, { ID_Kelas: st.kelas, Hari, Jam_Mulai, Jam_Selesai }); }
+    const w = e.target.closest('[data-wk]');
+    if (w) { const n = Number(w.dataset.wk); st.wk = n ? addDays(st.wk, n) : senin(todayStr()); render(); return; }
+    const g = e.target.closest('[data-goto-wk]');
+    if (g) { st.wk = g.dataset.gotoWk; render(); return; }
+    if (e.target.closest('[data-add-wk]')) openForm(null, { ID_Kelas: st.kelas, Tanggal_Mulai: st.wk });
   }
 
   function clashText(rec) {
     const conf = findConflicts(S.boot.jadwal.filter(j => j.ID_Jadwal !== rec.ID_Jadwal).concat([Object.assign({}, rec, { ID_Jadwal: '__new' })]));
     return (conf.__new || []).map(c => {
       const j = S.boot.jadwal.find(x => x.ID_Jadwal === c.id) || {};
-      return c.why === 'GADIK' ? 'Gadik ' + gadikName(j.ID_Gadik) + ' sudah mengajar ' + mapelName(j.ID_Mapel) + ' di ' + kelasName(j.ID_Kelas) + ' pada ' + j.Hari + ' ' + fmt.jam(j.Jam_Mulai) + '–' + fmt.jam(j.Jam_Selesai) + '.'
-        : kelasName(j.ID_Kelas) + ' sudah ada ' + mapelName(j.ID_Mapel) + ' pada ' + j.Hari + ' ' + fmt.jam(j.Jam_Mulai) + '–' + fmt.jam(j.Jam_Selesai) + '.';
+      return c.why === 'GADIK' ? 'Gadik ' + gadikName(j.ID_Gadik) + ' sudah mengajar ' + mapelName(j.ID_Mapel) + ' di ' + kelasName(j.ID_Kelas) + ' pada ' + rentangJadwal(j) + ' ' + fmt.jam(j.Jam_Mulai) + '–' + fmt.jam(j.Jam_Selesai) + '.'
+        : kelasName(j.ID_Kelas) + ' sudah ada ' + mapelName(j.ID_Mapel) + ' pada ' + rentangJadwal(j) + ' ' + fmt.jam(j.Jam_Mulai) + '–' + fmt.jam(j.Jam_Selesai) + '.';
     });
   }
 
+  /** Senin terdekat (hari ini bila Senin) — awal blok 6 hari bawaan. */
+  function seninBerikut() { const t = todayStr(), i = HARI.indexOf(hariOf(t)); return i === 0 ? t : addDays(t, 7 - i); }
+
   function openForm(j, preset) {
-    const isEdit = !!j, v0 = Object.assign({ ID_Kelas: st.kelas, ID_Mapel: '', ID_Gadik: '', Hari: 'Senin', Jam_Mulai: '07:30', Jam_Selesai: '09:30', Ruang: '' }, preset || {}, j || {});
+    const isEdit = !!j;
+    const v0 = Object.assign({ ID_Kelas: st.kelas, ID_Mapel: '', ID_Gadik: '', Hari: JADWAL.HARI_DEFAULT.join(','), Jam_Mulai: JADWAL.JAM_MULAI, Jam_Selesai: JADWAL.JAM_SELESAI, Ruang: '', Tanggal_Mulai: '', Tanggal_Selesai: '', Tutup_Jumat: '' }, preset || {}, j || {});
+    if (!v0.Tanggal_Mulai) v0.Tanggal_Mulai = seninBerikut();
+    if (!v0.Tanggal_Selesai) v0.Tanggal_Selesai = addDays(v0.Tanggal_Mulai, JADWAL.HARI_BLOK - 1);
+    const lama = isEdit && !j.Tanggal_Mulai;
     const gadik = S.boot.ref.gadik.filter(g => g.Aktif || g.ID_Gadik === v0.ID_Gadik).sort((a, b) => collator.compare(a.Nama_Lengkap, b.Nama_Lengkap));
     const mapel = mapelList(false).filter(m => isAktif(m.Status) || m.ID_Mapel === v0.ID_Mapel);
+    const hariOn = hariList(v0);
     const m = openModal({
-      title: isEdit ? 'Ubah Sesi Jadwal' : 'Tambah Sesi Jadwal', sub: isEdit ? 'ID ' + j.ID_Jadwal : 'Deteksi bentrok otomatis', icon: 'calendar',
+      title: isEdit ? 'Ubah Jadwal Mata Pelajaran' : 'Tambah Jadwal Mata Pelajaran', sub: isEdit ? 'ID ' + j.ID_Jadwal : '1 mapel = 6 hari • 08.00–17.00 WIT', icon: 'calendar',
       body: '<form id="jf" class="form-grid" novalidate><div id="jf-alert" class="alert red span-all" hidden></div>' +
+        (lama ? '<div class="alert gold span-all">' + icon('info') + '<div>Jadwal ini dibuat dengan format lama (berulang tiap pekan, ' + esc(hariTeks(j)) + ' ' + esc(fmt.jam(j.Jam_Mulai)) + '–' + esc(fmt.jam(j.Jam_Selesai)) + '). Lengkapi tanggal pelaksanaan dan jam 08.00–17.00 untuk menyimpan.</div></div>' : '') +
         '<div class="field span-all"><label>Kelas <span class="req">*</span></label><select name="ID_Kelas" class="select">' + options(kelasList(), 'ID_Kelas', k => k.Nama_Kelas + ' — ' + k.Nama_Angkatan, v0.ID_Kelas, 'Pilih kelas') + '</select></div>' +
         '<div class="field span-all"><label>Mata pelajaran <span class="req">*</span></label><select name="ID_Mapel" class="select">' + options(mapel, 'ID_Mapel', x => x.Nama_Mapel, v0.ID_Mapel, mapel.length ? 'Pilih mata pelajaran' : 'Belum ada mapel — tambah di Master Data') + '</select></div>' +
-        '<div class="field span-all"><label>Gadik pengajar <span class="req">*</span></label><select name="ID_Gadik" class="select">' + options(gadik, 'ID_Gadik', g => g.Nama_Lengkap, v0.ID_Gadik, gadik.length ? 'Pilih Gadik' : 'Belum ada akun Gadik aktif') + '</select></div>' +
-        '<div class="field"><label>Hari <span class="req">*</span></label><select name="Hari" class="select">' + HARI.map(h => '<option' + (h === v0.Hari ? ' selected' : '') + '>' + h + '</option>').join('') + '</select></div>' +
-        '<div class="field"><label>Ruang<span class="tag">Opsional</span></label><input name="Ruang" class="input" maxlength="60" placeholder="Contoh: Ruang Teori 02" value="' + esc(v0.Ruang) + '"></div>' +
-        '<div class="field"><label>Jam mulai <span class="req">*</span></label><input name="Jam_Mulai" type="time" class="input mono" value="' + esc(v0.Jam_Mulai) + '" step="300"></div>' +
-        '<div class="field"><label>Jam selesai <span class="req">*</span></label><input name="Jam_Selesai" type="time" class="input mono" value="' + esc(v0.Jam_Selesai) + '" step="300"></div>' +
+        '<div class="field span-all"><label>Gadik pengampu <span class="req">*</span></label><select name="ID_Gadik" class="select">' + options(gadik, 'ID_Gadik', g => g.Nama_Lengkap, v0.ID_Gadik, gadik.length ? 'Pilih Gadik' : 'Belum ada akun Gadik aktif') + '</select></div>' +
+        '<div class="field"><label>Tanggal mulai <span class="req">*</span></label><input name="Tanggal_Mulai" type="date" class="input mono" value="' + esc(v0.Tanggal_Mulai) + '"></div>' +
+        '<div class="field"><label>Tanggal selesai <span class="req">*</span><span class="tag">Otomatis 6 hari</span></label><input name="Tanggal_Selesai" type="date" class="input mono" value="' + esc(v0.Tanggal_Selesai) + '"></div>' +
+        '<div class="field span-all"><label>Hari pelaksanaan <span class="req">*</span></label><div class="hari-pick" id="jf-hari">' +
+          HARI.map(h => '<label class="hari-chip"><input type="checkbox" value="' + h + '"' + (hariOn.indexOf(h) > -1 ? ' checked' : '') + '><span>' + h + '</span></label>').join('') +
+        '</div><div class="hint" id="jf-hari-t"></div></div>' +
+        '<div class="field"><label>Jam mulai <span class="req">*</span></label><input name="Jam_Mulai" type="time" class="input mono" value="' + esc(v0.Jam_Mulai) + '" min="' + JADWAL.JAM_MULAI + '" max="' + JADWAL.JAM_SELESAI + '" step="300"></div>' +
+        '<div class="field"><label>Jam selesai <span class="req">*</span></label><input name="Jam_Selesai" type="time" class="input mono" value="' + esc(v0.Jam_Selesai) + '" min="' + JADWAL.JAM_MULAI + '" max="' + JADWAL.JAM_SELESAI + '" step="300"></div>' +
+        '<div class="field span-all"><label>Ruang<span class="tag">Opsional</span></label><input name="Ruang" class="input" maxlength="60" placeholder="Contoh: Ruang Teori 02" value="' + esc(v0.Ruang) + '"></div>' +
+        '<label class="check span-all tutup-jumat"><input type="checkbox" name="Tutup_Jumat"' + (v0.Tutup_Jumat === 'Ya' ? ' checked' : '') + '><span><b>Penutupan dimajukan ke hari Jumat</b><br><span class="small muted">Gadik dapat mengisi nilai hari Sabtu (hari ke-6) sejak hari Jumat.</span></span></label>' +
         '<div id="jf-clash" class="span-all"></div></form>',
       foot: (isEdit ? '<button class="btn danger-line left" id="jf-del">' + icon('trash') + 'Hapus</button>' : '') + '<button class="btn outline" data-close>Batal</button><button class="btn primary" id="jf-save">' + icon('save') + 'Simpan Jadwal</button>'
     });
-    const form = m.$('#jf');
+    const form = m.$('#jf'), tm = form.querySelector('[name=Tanggal_Mulai]'), ts = form.querySelector('[name=Tanggal_Selesai]');
+    let selesaiManual = isEdit && j.Tanggal_Selesai && j.Tanggal_Selesai !== addDays(j.Tanggal_Mulai, JADWAL.HARI_BLOK - 1);
+    const hariSel = () => $$('#jf-hari input', form).filter(x => x.checked).map(x => x.value);
+    const values = () => {
+      const v = formValues(form);
+      v.Hari = hariSel(); v.Tutup_Jumat = form.querySelector('[name=Tutup_Jumat]').checked;
+      delete v[''];
+      return v;
+    };
     const check = () => {
-      const v = formValues(form); v.ID_Jadwal = isEdit ? j.ID_Jadwal : '';
+      const v = values(); v.ID_Jadwal = isEdit ? j.ID_Jadwal : '';
+      const tgl = isTgl(v.Tanggal_Mulai) && isTgl(v.Tanggal_Selesai) && v.Tanggal_Selesai >= v.Tanggal_Mulai ? tanggalJadwal({ Hari: v.Hari.join(','), Tanggal_Mulai: v.Tanggal_Mulai, Tanggal_Selesai: v.Tanggal_Selesai }) : [];
+      m.$('#jf-hari-t').innerHTML = tgl.length ? '<b>' + tgl.length + ' hari penilaian</b>: ' + esc(tgl.map(t => hariOf(t).slice(0, 3) + ' ' + Number(t.slice(8))).join(', ')) + (tgl.length !== JADWAL.HARI_BLOK ? ' <span style="color:var(--red)">(standar ' + JADWAL.HARI_BLOK + ' hari)</span>' : '') : 'Pilih tanggal & hari pelaksanaan.';
       const box = m.$('#jf-clash');
-      if (!v.ID_Kelas || !v.ID_Gadik || isNaN(menit(v.Jam_Mulai)) || isNaN(menit(v.Jam_Selesai))) { box.innerHTML = ''; return; }
-      if (menit(v.Jam_Selesai) <= menit(v.Jam_Mulai)) { box.innerHTML = '<div class="alert red">' + icon('alert-circle') + '<div>Jam selesai harus setelah jam mulai.</div></div>'; return; }
-      const t = clashText(v);
+      const jm = menit(v.Jam_Mulai), js = menit(v.Jam_Selesai);
+      if (!isNaN(jm) && !isNaN(js) && (jm < menit(JADWAL.JAM_MULAI) || js > menit(JADWAL.JAM_SELESAI))) { box.innerHTML = '<div class="alert red">' + icon('alert-circle') + '<div>Pelaksanaan hanya pukul 08.00–17.00 WIT.</div></div>'; return; }
+      if (!v.ID_Kelas || !v.ID_Gadik || isNaN(jm) || isNaN(js) || !tgl.length) { box.innerHTML = ''; return; }
+      if (js <= jm) { box.innerHTML = '<div class="alert red">' + icon('alert-circle') + '<div>Jam selesai harus setelah jam mulai.</div></div>'; return; }
+      const t = clashText(Object.assign({}, v, { Hari: v.Hari.join(',') }));
       box.innerHTML = t.length ? '<div class="alert red">' + icon('alert-triangle') + '<div><b>Peringatan bentrok</b><br>' + t.map(esc).join('<br>') + '</div></div>' : '<div class="alert green">' + icon('check-circle') + '<div>Tidak ada bentrok untuk Gadik dan kelas ini.</div></div>';
     };
+    tm.addEventListener('change', () => { if (isTgl(tm.value) && !selesaiManual) ts.value = addDays(tm.value, JADWAL.HARI_BLOK - 1); check(); });
+    ts.addEventListener('change', () => { selesaiManual = ts.value !== addDays(tm.value, JADWAL.HARI_BLOK - 1); });
     form.addEventListener('input', check); form.addEventListener('change', check); check();
     form.addEventListener('submit', e => { e.preventDefault(); m.$('#jf-save').click(); });
     if (isEdit) m.$('#jf-del').onclick = async () => { m.close(); remove(j); };
     m.$('#jf-save').onclick = async () => {
       clearErrors(form); m.$('#jf-alert').hidden = true;
-      const v = formValues(form);
-      for (const k of ['ID_Kelas', 'ID_Mapel', 'ID_Gadik', 'Jam_Mulai', 'Jam_Selesai']) if (!v[k]) return fieldError(form, k, 'Wajib diisi.');
+      const v = values();
+      for (const k of ['ID_Kelas', 'ID_Mapel', 'ID_Gadik', 'Tanggal_Mulai', 'Tanggal_Selesai', 'Jam_Mulai', 'Jam_Selesai']) if (!v[k]) return fieldError(form, k, 'Wajib diisi.');
+      if (!v.Hari.length) { const a = m.$('#jf-alert'); a.hidden = false; a.innerHTML = icon('alert-circle') + '<div>Pilih minimal satu hari pelaksanaan.</div>'; return; }
+      if (v.Tanggal_Selesai < v.Tanggal_Mulai) return fieldError(form, 'Tanggal_Selesai', 'Harus sama atau setelah tanggal mulai.');
+      if (menit(v.Jam_Mulai) < menit(JADWAL.JAM_MULAI)) return fieldError(form, 'Jam_Mulai', 'Paling awal pukul 08.00.');
+      if (menit(v.Jam_Selesai) > menit(JADWAL.JAM_SELESAI)) return fieldError(form, 'Jam_Selesai', 'Paling lambat pukul 17.00.');
       if (menit(v.Jam_Selesai) <= menit(v.Jam_Mulai)) return fieldError(form, 'Jam_Selesai', 'Jam selesai harus setelah jam mulai.');
       if (isEdit) v.ID_Jadwal = j.ID_Jadwal;
       const done = busy(m.$('#jf-save'), 'Menyimpan…');
@@ -678,11 +727,11 @@ window.JadwalAdmin = (() => {
       if (!res.success) return showServerError(form, res, '#jf-alert');
       S.boot.jadwal = res.data.jadwal; bootChanged();
       m.close();
-      st.kelas = v.ID_Kelas;
+      st.kelas = v.ID_Kelas; st.wk = senin(v.Tanggal_Mulai);
       render();
-      toast(isEdit ? 'Jadwal diperbarui' : 'Jadwal ditambahkan', mapelName(v.ID_Mapel) + ' • ' + v.Hari + ' ' + fmt.jam(v.Jam_Mulai));
+      toast(isEdit ? 'Jadwal diperbarui' : 'Jadwal ditambahkan', mapelName(v.ID_Mapel) + ' • ' + rentangJadwal({ Hari: v.Hari.join(','), Tanggal_Mulai: v.Tanggal_Mulai, Tanggal_Selesai: v.Tanggal_Selesai }));
       if (res.data.penugasanBaru) {
-        toast('Penugasan ditambahkan otomatis', gadikName(v.ID_Gadik) + ' kini ditugaskan di ' + kelasName(v.ID_Kelas) + ' agar dapat menginput nilai sesi ini.', 'info');
+        toast('Penugasan ditambahkan otomatis', gadikName(v.ID_Gadik) + ' kini ditugaskan di ' + kelasName(v.ID_Kelas) + ' agar dapat menginput nilai mapel ini.', 'info');
         loadUsers(() => {}, true);
       }
     };
@@ -690,7 +739,7 @@ window.JadwalAdmin = (() => {
 
   async function remove(j) {
     if (!j) return;
-    const r = await hapusData('jadwal', j.ID_Jadwal, { judul: 'Hapus sesi jadwal?', nama: mapelName(j.ID_Mapel) + ' — ' + kelasName(j.ID_Kelas) + ', ' + j.Hari + ' ' + fmt.jam(j.Jam_Mulai) + '–' + fmt.jam(j.Jam_Selesai), utama: 'Jadwal' });
+    const r = await hapusData('jadwal', j.ID_Jadwal, { judul: 'Hapus jadwal mapel?', nama: mapelName(j.ID_Mapel) + ' — ' + kelasName(j.ID_Kelas) + ', ' + rentangJadwal(j), utama: 'Jadwal' });
     if (r) render();
   }
 
@@ -753,8 +802,7 @@ const RekapPage = (() => {
 
   function fill() {
     const host = $('#rk-main', el), d = data();
-    const units = d ? hariPenilaian(d.sesi) : [], labelOf = {};
-    units.forEach(u => { labelOf[u.s.ID_Sesi] = u.label; });
+    const units = d ? hariPenilaian(d.sesi) : [], labelOf = d ? labelHariMapel(d.sesi) : {};
     const nSesi = d ? d.sesi.length : 0, nDraf = d ? d.sesi.filter(s => s.Status !== 'Selesai').length : 0;
     $('#rk-tabs', el).innerHTML = [['harian', 'Penilaian Harian', 'calendar'], ['mental', 'Nilai Mental', 'shield-star']].map(t =>
       '<button role="tab" data-tab="' + t[0] + '" class="' + (st.tab === t[0] ? 'on' : '') + '" aria-selected="' + (st.tab === t[0]) + '">' + icon(t[2], 'sm') + t[1] + (t[0] === 'harian' && d ? '<span class="count">' + nSesi + '</span>' : '') + '</button>').join('');
@@ -840,13 +888,13 @@ const RekapPage = (() => {
   function ekspor(kind, btn) {
     const d = data(), s = d && d.sesi.find(x => x.ID_Sesi === st.sesi);
     if (!s) return;
-    const label = (hariPenilaian(d.sesi).find(u => u.s.ID_Sesi === s.ID_Sesi) || {}).label || '';
+    const label = labelHariMapel(d.sesi)[s.ID_Sesi] || '';
     const all = urutNama(S.boot.peserta.filter(p => p.ID_Kelas === st.kelas)), v = (d.nilai || {})[s.ID_Sesi] || {};
     const out = {
       judul: 'PENILAIAN HARIAN PESERTA PELATIHAN', instansi: String(CFG.INSTANSI || 'SPN Polda Papua Barat').toUpperCase(),
       ringkas: kelasName(st.kelas) + ' • ' + label + ' • ' + fmt.tgl(s.Tanggal),
       info: [['Kelas', kelasName(st.kelas, true)], ['Mata Pelajaran', mapelName(s.ID_Mapel)], ['Hari / Tanggal', tglPanjang(s.Tanggal, true) + (label ? ' (' + label + ')' : '')], ['Gadik', s.ID_Gadik ? gadikName(s.ID_Gadik) : '—']],
-      format: PENILAIAN, sheet: label || 'PENILAIAN HARIAN',
+      format: PENILAIAN, sheet: label || 'PENILAIAN HARIAN', ttd: ttdGadik(s.ID_Gadik, s.Tanggal),
       peserta: all.map(p => ({ nama: p.Nama_Lengkap, pn: pangkatNrp(p) })), nilai: all.map(p => v[p.ID_Peserta] || KOSONG())
     };
     unduhBerkas(kind === 'pdf' ? 'hariPdf' : 'hariXlsx', out, namaBerkas(['Penilaian-Harian', kelasName(st.kelas), label, mapelName(s.ID_Mapel), s.Tanggal], kind === 'pdf' ? 'pdf' : 'xlsx'), btn);
@@ -856,7 +904,7 @@ const RekapPage = (() => {
   async function hapusSesi(id) {
     const d = data(), s = d && d.sesi.find(x => x.ID_Sesi === id);
     if (!s) return;
-    const label = (hariPenilaian(d.sesi).find(u => u.s.ID_Sesi === id) || {}).label;
+    const label = labelHariMapel(d.sesi)[id];
     const r = await hapusData('sesi', id, { judul: 'Hapus sesi penilaian?', nama: (label ? label + ' — ' : '') + mapelName(s.ID_Mapel) + ', ' + fmt.tgl(s.Tanggal, { hari: true }), utama: 'Sesi_Nilai', extra: { idKelas: st.kelas } });
     if (!r) return;
     st.sesi = '';

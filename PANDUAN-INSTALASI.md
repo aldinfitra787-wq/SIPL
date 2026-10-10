@@ -1,8 +1,18 @@
 # Panduan Instalasi SIPL — SPN Polda Papua Barat
 
-**Sistem Informasi Pelatihan** • Versi 1.3.1 (tampilan) • 1.3.0 (server)
+**Sistem Informasi Pelatihan** • Versi 1.4.1 (tampilan) • 1.4.0 (server)
 
-> **Sudah memasang versi 1.0, 1.1, atau 1.2?** Langsung ke **Bagian G — Memperbarui Versi**. Data Anda tetap aman dan database diperbarui otomatis.
+> **Sudah memasang versi sebelumnya (1.0 – 1.3)?** Langsung ke **Bagian G — Memperbarui Versi**. Data Anda tetap aman dan database diperbarui otomatis.
+
+### Yang baru di versi 1.4 — jadwal 6 hari & tanda tangan
+- **Satu mata pelajaran = 6 hari (Senin–Sabtu).** Di menu Jadwal, satu mapel cukup dibuat **sekali**: pilih tanggal mulai (Senin), tanggal selesai terisi otomatis (Sabtu), dan keenam hari langsung tercentang. Setiap hari menjadi **HARI 1 … HARI 6** di Rekap Akhir.
+- **Jam pelaksanaan 08.00–17.00 WIT** (bawaan formulir; jam di luar rentang itu ditolak).
+- **Penutupan dimajukan ke Jumat:** centang opsi ini pada jadwal mapel, maka Gadik dapat **mengisi nilai hari Sabtu (HARI 6) sejak hari Jumat**. Dashboard Gadik menampilkan tombol *Isi nilai Sabtu* pada hari Jumat.
+- **Kolom tanda tangan Gadik pengampu** di kanan bawah setiap PDF dan Excel (Penilaian Harian, Rekap Harian, Rekap Akhir): kota & tanggal, *GADIK PENGAMPU MATA PELAJARAN*, ruang kosong untuk tanda tangan, nama, dan NRP.
+- **Semua unduhan berukuran A4 potrait** (PDF dan pengaturan cetak Excel).
+- **Kop di pojok kiri atas** setiap PDF dan sheet Excel: *KEPOLISIAN NEGARA REPUBLIK INDONESIA / DAERAH PAPUA BARAT / SEKOLAH POLISI NEGARA* (bergaris bawah). Teks kop dapat diubah di `js/config.js` → `KOP`.
+- **Rekap Akhir per mata pelajaran**: pilih mapel (bawaan: mapel terbaru) sehingga NIL AKHIR dihitung dari 6 hari mapel itu, sama seperti berkas PROLAT. Pilihan *Semua mata pelajaran (gabungan)* tetap tersedia.
+- Matriks jadwal Admin kini **per pekan** (◀ ▶ untuk berpindah pekan) dan menampilkan tanggal tiap hari.
 
 ### Yang baru di versi 1.3 — tombol Hapus & logo
 - **Tombol Hapus di semua tabel**: Personel & Akun, Master Data (Kelas, Peleton, Mata Pelajaran, Penugasan), Jadwal, Peserta Pelatihan (sekarang Admin juga bisa menghapus), Rekap Harian (sesi penilaian dan nilai mental).
@@ -165,7 +175,13 @@ Tunggu 1–2 menit → muncul **"Your site is live at https://USERNAME.github.io
    2. **Peleton** per kelas.
    3. **Mata Pelajaran**.
 4. **Personel & Akun → Tambah Akun** untuk setiap Gadik dan Pengasuh, sekaligus pilih kelas/peleton yang diampu.
-5. **Jadwal Pelajaran** → isi matriks mingguan per kelas (sistem memperingatkan bentrok). Jadwal inilah yang menentukan **sesi** yang muncul di Input Nilai Harian milik Gadik.
+5. **Jadwal Pelajaran → Tambah Jadwal Mapel**, untuk setiap mata pelajaran:
+   - pilih **Kelas**, **Mata pelajaran**, **Gadik pengampu**;
+   - **Tanggal mulai** (Senin) — tanggal selesai otomatis Sabtu (6 hari); hari pelaksanaan Senin–Sabtu sudah tercentang;
+   - jam **08.00–17.00** (bawaan), ruang (opsional);
+   - centang **Penutupan dimajukan ke hari Jumat** bila penutupan mapel itu dimajukan.
+
+   Mapel berikutnya dijadwalkan di pekan berikutnya. Sistem memperingatkan bila kelas atau Gadik yang sama dijadwalkan pada tanggal & jam yang sama. Jadwal inilah yang menentukan mapel yang muncul di Input Nilai Harian milik Gadik pada tiap tanggal.
 6. Bagikan alamat aplikasi + username/password awal ke masing-masing personel.
 7. Gadik mengisi **Peserta Pelatihan** kelasnya, lalu **Input Nilai Harian** setiap selesai mengajar. Pengasuh mengisi **Nilai Mental**.
 
@@ -173,20 +189,21 @@ Tunggu 1–2 menit → muncul **"Your site is live at https://USERNAME.github.io
 
 | Langkah | Yang dilakukan | Keterangan |
 |---|---|---|
-| 1 | Buka **Input Nilai Harian** → pilih **tanggal** | Bawaan: hari ini. Ada tombol *Hari ini* / *Kemarin*. Tanggal yang belum tiba ditolak. |
-| 2 | Pilih **sesi** pada kartu pilihan | Hanya sesi yang Anda ajar pada hari itu (sesuai jadwal). Bila hanya satu, langsung terpilih. |
+| 1 | Buka **Input Nilai Harian** → pilih **tanggal** | Bawaan: hari ini. Ada tombol *Hari ini* / *Kemarin*. Tanggal yang belum tiba ditolak — kecuali **Sabtu** pada hari **Jumat** bila jadwal mapel itu dicentang *Penutupan dimajukan ke Jumat* (muncul tombol *Sabtu*). |
+| 2 | Pilih **sesi** pada kartu pilihan | Hanya mapel yang Anda ampu pada tanggal itu (kartu menampilkan *HARI n / 6*). Bila hanya satu, langsung terpilih. |
 | 3 | Isi skor **A1–C2 (0–10)** tiap peserta | JUMLAH tiap aspek terhitung seketika. Tersimpan otomatis sebagai **draf** ±1,5 detik setelah berhenti mengetik. **Enter** = butir berikutnya, **↑ ↓** = peserta atas/bawah. Di HP, tiap peserta tampil sebagai kartu. |
 | 4 | Tekan **Selesai & Kirim ke Rekap** | Muncul konfirmasi jumlah terisi/kosong. Setelah dikirim, nilai **langsung masuk rekap** dan **terkunci**. |
 
 - Nilai yang masih **draf tidak dihitung** di rekap. Dashboard Gadik mengingatkan sesi yang belum dikirim.
 - Perlu koreksi setelah dikirim? Admin membuka **Rekap Harian → Penilaian Harian → Buka kunci** dan menuliskan alasannya. Gadik melihat alasan itu, memperbaiki nilai, lalu menekan **Selesai & Kirim ke Rekap** lagi.
-- Setiap sesi yang dikirim menjadi satu **HARI** di Rekap Akhir (HARI 1 = tanggal terlama). Bila satu kelas punya dua sesi pada tanggal yang sama, keduanya tampil sebagai *HARI n-1* dan *HARI n-2*.
+- Setiap hari yang dikirim menjadi satu **HARI** di Rekap Akhir mapel itu (HARI 1 = Senin … HARI 6 = Sabtu). Bila satu kelas punya dua sesi mapel yang sama pada tanggal yang sama, keduanya tampil sebagai *HARI n-1* dan *HARI n-2*.
+- PDF/Excel yang diunduh berukuran **A4 potrait** dan memuat **kolom tanda tangan Gadik pengampu** di kanan bawah — tinggal dicetak lalu ditandatangani. Kota pada kolom tanda tangan diatur di `js/config.js` (`KOTA: 'Manokwari'`).
 - Tombol **Unduh PDF / Unduh Excel** di atas lembar menghasilkan lembar format *HARI* seperti berkas asli (Excel lengkap dengan rumus JUMLAH).
 
 ### Rekap Akhir (Admin & Gadik)
 1. Buka menu **Rekap Akhir** → muncul kartu tiap kelas (Gadik hanya melihat kelas penugasannya).
-2. Klik kelas → tabel **NO · NAMA · PANGKAT/NRP · JUMLAH ASPEK PERILAKU · TEORI · PRAKTEK · NIL AKHIR · RANK**. Pilih urutan **Abjad** atau **Peringkat**; klik baris untuk rincian per hari.
-3. **Unduh Excel** → berkas berisi sheet *HARI 1 … HARI n* dan *NIL AKHIR* dengan rumus aktif. **Unduh PDF** → tabel NIL AKHIR siap cetak (A4).
+2. Klik kelas → pilih **Mata pelajaran** (bawaan: mapel terbaru) → tabel **NO · NAMA · PANGKAT/NRP · JUMLAH ASPEK PERILAKU · TEORI · PRAKTEK · NIL AKHIR · RANK** dari 6 hari mapel itu. Pilih urutan **Abjad** atau **Peringkat**; klik baris untuk rincian per hari.
+3. **Unduh Excel** → berkas berisi sheet *HARI 1 … HARI 6* dan *NIL AKHIR* dengan rumus aktif. **Unduh PDF** → tabel NIL AKHIR siap cetak (A4 potrait). Keduanya memuat kolom tanda tangan Gadik pengampu.
 
 ### Hak akses per peran (ditegakkan server)
 
@@ -225,7 +242,7 @@ Dipakai untuk memindahkan data dari **database SIPL lama** atau **spreadsheet bu
 | `Mapel` / `Mata_Pelajaran` | Mata Pelajaran, Bobot/JP |
 | `Users` / `Akun` | Username, Nama, Peran |
 | `Gadik` / `Pengasuh` | Username, Nama, Pangkat/NRP, HP |
-| `Jadwal` | Kelas, Mapel, Gadik, Hari, Jam Mulai, Jam Selesai, Ruang |
+| `Jadwal` | Kelas, Mapel, Gadik, Hari (mis. `Senin - Sabtu` atau `Senin, Selasa`), Jam Mulai, Jam Selesai, Ruang, Tanggal Mulai, Tanggal Selesai, Tutup Jumat (Ya/kosong). Jadwal tanpa tanggal dianggap jadwal lama yang berulang tiap pekan. |
 | `Nilai` / `Nilai_Harian` | NRP, Mapel, **A1 A2 A3 B1 B2 C1 C2** (0–10) — atau satu kolom **Nilai** (0–100) — Tanggal (opsional), Waktu (opsional) |
 | `Sesi_Nilai` (database SIPL 1.1/1.2) | semua kolom asli |
 | `Nilai_Mental` | NRP, Nilai, Catatan |
@@ -258,15 +275,16 @@ Tunggu 1–2 menit; bila tampilan masih lama tekan **Ctrl + Shift + R**.
 
 ---
 
-## Bagian G — Memperbarui Versi (1.0 / 1.1 / 1.2 → 1.3)
+## Bagian G — Memperbarui Versi (1.0 – 1.3 → 1.4)
 
 Lakukan saat aplikasi sepi (mis. sore hari). Data lama **tidak dihapus**. Langkahnya sama dari versi mana pun.
 
 **1. Backend**
 1. Buka proyek **SIPL Backend** di script.google.com.
-2. Berkas **Kode** → hapus seluruh isinya → tempel isi `Kode.gs` versi 1.3. Lakukan hal yang sama untuk **Migrasi** (`Migrasi.gs`). Tekan **Ctrl + S**.
+2. Berkas **Kode** → hapus seluruh isinya → tempel isi `Kode.gs` versi 1.4. Lakukan hal yang sama untuk **Migrasi** (`Migrasi.gs`). Tekan **Ctrl + S**.
 3. **Terapkan → Kelola deployment → ✏️ Edit → Versi: Versi baru → Terapkan.** (URL `/exec` tetap sama.)
 4. Database diperbarui **otomatis** pada permintaan pertama (mis. saat ada yang login). Pembaruan ini:
+   - menambah kolom **`Tanggal_Mulai`**, **`Tanggal_Selesai`**, **`Tutup_Jumat`** di sheet `Jadwal`,
    - membuat sheet baru **`Sesi_Nilai`** (status tiap sesi penilaian: Draf/Selesai) bila belum ada, dan **`Logo_Aplikasi`** (tempat menyimpan logo),
    - menambah kolom **`Tanggal`**, **`ID_Jadwal`**, dan **`A1 A2 A3 B1 B2 C1 C2`** di sheet `Nilai`,
    - memberi tanggal pada nilai lama (diambil dari `Waktu_Input`),
@@ -276,17 +294,18 @@ Lakukan saat aplikasi sepi (mis. sore hari). Data lama **tidak dihapus**. Langka
 
 **2. Frontend**
 1. Simpan dulu nilai `GAS_URL` dari `js/config.js` lama Anda.
-2. Ekstrak `sipl-frontend.zip` versi 1.3, lalu **salin seluruh isinya menimpa** isi folder repository lama Anda (`index.html`, `css`, `js`, `img`, dan berkas `.md`).
+2. Ekstrak `sipl-frontend.zip` versi 1.4, lalu **salin seluruh isinya menimpa** isi folder repository lama Anda (`index.html`, `css`, `js`, `img`, dan berkas `.md`).
 3. Buka `js/config.js` yang baru → isi kembali `GAS_URL` yang tadi disimpan.
 4. Kirim ke GitHub:
    ```bash
    git add .
-   git commit -m "SIPL 1.3 - tombol hapus berantai, logo bisa diganti"
+   git commit -m "SIPL 1.4 - jadwal 6 hari, tanda tangan Gadik, A4 potrait"
    git push
    ```
 5. Tunggu 1–2 menit. Berkas versi baru otomatis dimuat (tidak perlu hapus cache); bila tampilan masih lama, tekan **Ctrl + Shift + R**.
 
 **Catatan pembaruan**
+- **Jadwal lama** (dibuat sebelum v1.4, berulang tiap pekan tanpa tanggal) **tetap berjalan** dan ditandai *Format lama* di tampilan Daftar. Saat diubah, lengkapi tanggal pelaksanaan dan jam 08.00–17.00. Untuk mapel berikutnya, buat jadwal baru dengan tanggal mulai — lalu hapus jadwal lama bila sudah tidak dipakai (hati-hati: nilai sesi jadwal itu ikut terhapus).
 - **Logo lama (v1.0–1.2)** yang diunggah lewat Google Drive tetap tampil. Untuk memakai cara penyimpanan baru (lebih andal), unggah ulang logo di **Pengaturan**.
 - Kolom `Jenis_Pendidikan` di sheet `Angkatan_Kelas` tidak dipakai lagi. Boleh dibiarkan atau dihapus manual.
 - Gadik yang sudah terjadwal di suatu kelas tetapi belum punya penugasan di kelas itu akan otomatis ditugaskan saat Admin menyimpan ulang jadwalnya. Periksa **Master Data → Penugasan** bila ada Gadik yang tidak melihat sesinya.
@@ -387,7 +406,11 @@ Cadangan otomatis tersimpan di folder **Cadangan Harian** (14 salinan terakhir).
 | Nilai | Admin: Rekap Harian → **Buka kunci** | sesi kembali Draf; Gadik melihat alasannya dan bisa koreksi |
 | Rekap Akhir | buka kelas → **Unduh Excel** | berkas berisi sheet HARI 1…n + NIL AKHIR; nilai di Excel sama dengan layar |
 | Rekap Akhir | **Unduh PDF** | tabel NIL AKHIR + RANK siap cetak |
-| Jadwal | jadwalkan 1 Gadik di 2 kelas pada jam sama | peringatan bentrok |
+| Jadwal | Tambah Jadwal Mapel | 6 hari Senin–Sabtu tercentang, jam 08.00–17.00, tanggal selesai = Sabtu |
+| Jadwal | isi jam mulai 07.00 | ditolak: pelaksanaan 08.00–17.00 |
+| Jadwal | jadwalkan 1 Gadik di 2 kelas pada pekan yang sama | peringatan bentrok |
+| Penutupan Jumat | centang opsi di jadwal, login Gadik hari Jumat | dashboard menampilkan *Isi nilai Sabtu*; lembar HARI 6 bisa diisi |
+| Unduh | Unduh PDF lembar harian / Rekap Akhir | A4 potrait, kolom tanda tangan Gadik di kanan bawah |
 | Logo | Pengaturan → pilih logo → Simpan Logo | logo tampil di menu, halaman login, dan ikon tab; buka di HP → logo sama |
 | Hapus | Master Data → Mata Pelajaran → 🗑 pada mapel yang sudah dinilai | dialog menampilkan jadwal & nilai yang ikut terhapus; tombol aktif setelah dicentang |
 | Hapus | Personel → 🗑 akun Gadik | jadwal & nilai mapelnya ikut hilang dari Jadwal dan Rekap; Gadik tidak bisa login |
@@ -411,7 +434,10 @@ Cadangan otomatis tersimpan di folder **Cadangan Harian** (14 salinan terakhir).
 | Data di Sheets diubah manual tidak muncul | cache server | tunggu ±1 menit atau jalankan `bersihkanCache` |
 | "Server sedang melayani banyak pengguna" | puncak penyimpanan bersamaan | aplikasi mencoba ulang otomatis; nilai tetap aman sebagai draf |
 | `Sheet "Sesi_Nilai" tidak ditemukan di database` | database belum diperbarui | Jalankan **`perbaikiSheet`** sekali di editor Apps Script, atau pasang `Kode.gs` terbaru (memperbarui database otomatis) lalu **Versi baru** |
-| Gadik: "Tidak ada sesi Anda pada hari …" | belum ada jadwal Gadik itu pada hari tersebut | Admin menambah sesi di **Jadwal Pelajaran**, lalu Gadik muat ulang halaman |
+| Gadik: "Tidak ada mapel Anda pada …" | tanggal itu di luar jadwal mapel Gadik | pilih tanggal dari tombol yang tersedia, atau Admin menambah jadwal mapel di **Jadwal Pelajaran** |
+| Gadik tidak bisa mengisi nilai Sabtu pada hari Jumat | jadwal mapel belum dicentang *Penutupan dimajukan ke Jumat* | Admin: Jadwal → klik mapel → centang opsi → Simpan |
+| Menyimpan jadwal lama: "Isi tanggal mulai pelaksanaan mapel" | jadwal format lama belum punya tanggal | isi tanggal mulai (Senin) dan jam 08.00–17.00 |
+| Nama/NRP di kolom tanda tangan kosong | data Gadik belum punya NRP atau sesi tanpa Gadik | lengkapi NRP di **Personel & Akun**; untuk gabungan beberapa Gadik, kolom nama dibiarkan kosong untuk diisi tangan |
 | Nilai sudah diisi tetapi tidak muncul di Rekap | sesi masih **Draf** | Gadik menekan **Selesai & Kirim ke Rekap** (lihat daftar sesi di Rekap Harian) |
 | "Versi aplikasi di perangkat Anda sudah usang" | tampilan lama masih terbuka setelah pembaruan | tekan **Ctrl + Shift + R** (HP: tutup & buka lagi), lalu isi ulang baris itu |
 | Console: `Cannot read properties of undefined (reading 'JDW-…')`, lembar nilai tidak tampil | data lama dari versi sebelumnya tersimpan di browser | sudah diperbaiki di tampilan **1.3.1** (data lama diabaikan & diambil ulang otomatis). Pasang ZIP terbaru, lalu **Ctrl + Shift + R** |
@@ -432,4 +458,4 @@ Cadangan otomatis tersimpan di folder **Cadangan Harian** (14 salinan terakhir).
 - **Riwayat perubahan** (login, nilai, kirim ke rekap, buka kunci, akun, jadwal) tetap ditulis ke sheet `Log_Aktivitas` setiap 1 menit untuk audit, tetapi tidak lagi ditampilkan sebagai menu. Setiap baris `Nilai` dan `Nilai_Mental` juga mencatat penginput dan waktunya; `Sesi_Nilai` mencatat siapa dan kapan sesi dikirim ke rekap.
 - **Kuota:** dengan "Jalankan sebagai: Saya", seluruh pengguna memakai kuota akun pemilik (± 30 eksekusi bersamaan). Aplikasi dirancang hemat: cache berlapis, satu panggilan per layar, dan simpan nilai per kelompok.
 - **Repository publik:** kode tampilan di GitHub terlihat publik, tetapi tidak berisi rahasia apa pun. Data hanya bisa dibaca lewat login di server.
-- Aplikasi sudah diuji dengan tiruan layanan Google (343 skenario: login, isolasi kelas, hapus berantai semua jenis data, logo, lembar A1–C2, kunci & buka kunci, Rekap Akhir & RANK, berkas unduhan dibuka ulang dengan LibreOffice, bentrok jadwal, simpan otomatis, migrasi, pembaruan otomatis dari v1.0/1.1) dan diperiksa tampilannya di Chromium (desktop & HP). Tetap lakukan **Uji Coba Sebelum Rilis** di atas dengan akun Google asli.
+- Aplikasi sudah diuji dengan tiruan layanan Google (382 skenario: login, isolasi kelas, jadwal 6 hari & bentrok per tanggal, penutupan Jumat, PDF/Excel A4 potrait bertanda tangan, hapus berantai semua jenis data, logo, lembar A1–C2, kunci & buka kunci, Rekap Akhir & RANK, berkas unduhan dibuka ulang dengan LibreOffice, bentrok jadwal, simpan otomatis, migrasi, pembaruan otomatis dari v1.0/1.1) dan diperiksa tampilannya di Chromium (desktop & HP). Tetap lakukan **Uji Coba Sebelum Rilis** di atas dengan akun Google asli.

@@ -198,7 +198,7 @@ async function prefetch() {
   else if (S.role === 'Gadik') {
     // Sesi mengajar hari ini → siapkan data input nilai harian
     const t = todayStr();
-    if (S.boot.jadwal.some(j => j.ID_Gadik === S.me.ID_Gadik && j.Hari === hariOf(t))) calls = [{ action: 'nilaiHarian', data: { tanggal: t } }];
+    if (S.boot.jadwal.some(j => j.ID_Gadik === S.me.ID_Gadik && jadwalAktif(j, t))) calls = [{ action: 'nilaiHarian', data: { tanggal: t } }];
   } else if (S.role === 'Pengasuh') calls = [{ action: 'mentalList' }];
   calls = calls.filter(c => {
     const key = c.action === 'usersList' ? 'users' : c.action === 'mentalList' ? 'mental' : 'harian:' + c.data.tanggal;

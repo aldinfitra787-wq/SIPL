@@ -3,7 +3,8 @@
    Dimuat hanya saat tombol "Unduh" pertama kali ditekan.
    - XLSX: lembar HARI & NIL AKHIR sesuai format PENILAIAN PROLAT, lengkap dengan RUMUS
      (=SUM, RANK, COUNTIF), sel gabungan, garis tabel, dan pengaturan cetak A4.
-   - PDF : tabel A4 dengan huruf Helvetica bawaan PDF, kepala tabel diulang tiap halaman.
+   - PDF : tabel A4 potrait dengan huruf Helvetica bawaan PDF, kepala tabel diulang tiap halaman,
+           kolom tanda tangan Gadik pengampu di kanan bawah.
    ========================================================================== */
 (function () {
   'use strict';
@@ -64,7 +65,7 @@
   // ==========================================================================
   // XLSX
   // ==========================================================================
-  const X = { def: 0, title: 1, sub: 2, th: 3, td: 4, tdc: 5, num: 6, numb: 7, label: 8, note: 9, tdb: 10 };
+  const X = { def: 0, title: 1, sub: 2, th: 3, td: 4, tdc: 5, num: 6, numb: 7, label: 8, note: 9, tdb: 10, ttd: 11, ttdNama: 12, kop: 13, kopAkhir: 14 };
   const xesc = function (s) {
     return String(s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
       .replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; });
@@ -75,14 +76,14 @@
 
   const STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-    '<fonts count="4"><font><sz val="11"/><name val="Arial"/><family val="2"/></font><font><b/><sz val="11"/><name val="Arial"/><family val="2"/></font>' +
-    '<font><b/><sz val="14"/><name val="Arial"/><family val="2"/></font><font><i/><sz val="9"/><color rgb="FF555555"/><name val="Arial"/><family val="2"/></font></fonts>' +
+    '<fonts count="5"><font><sz val="11"/><name val="Arial"/><family val="2"/></font><font><b/><sz val="11"/><name val="Arial"/><family val="2"/></font>' +
+    '<font><b/><sz val="14"/><name val="Arial"/><family val="2"/></font><font><i/><sz val="9"/><color rgb="FF555555"/><name val="Arial"/><family val="2"/></font><font><b/><u/><sz val="11"/><name val="Arial"/><family val="2"/></font></fonts>' +
     '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>' +
     '<fill><patternFill patternType="solid"><fgColor rgb="FFF3E7C4"/><bgColor indexed="64"/></patternFill></fill></fills>' +
-    '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>' +
-    '<border><left style="thin"><color auto="1"/></left><right style="thin"><color auto="1"/></right><top style="thin"><color auto="1"/></top><bottom style="thin"><color auto="1"/></bottom><diagonal/></border></borders>' +
+    '<borders count="3"><border><left/><right/><top/><bottom/><diagonal/></border>' +
+    '<border><left style="thin"><color auto="1"/></left><right style="thin"><color auto="1"/></right><top style="thin"><color auto="1"/></top><bottom style="thin"><color auto="1"/></bottom><diagonal/></border><border><left/><right/><top/><bottom style="thin"><color auto="1"/></bottom><diagonal/></border></borders>' +
     '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-    '<cellXfs count="11">' +
+    '<cellXfs count="15">' +
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
     '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
     '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
@@ -94,6 +95,10 @@
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
     '<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
     '<xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
+    '<xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
+    '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
+    '<xf numFmtId="0" fontId="1" fillId="0" borderId="2" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
     '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
 
   function cellXml(c, R) {
@@ -227,6 +232,7 @@
     const tx = align === 'c' ? x - w / 2 : align === 'r' ? x - w : x;
     this.ops.push((gray ? '0.35 g ' : '0 g ') + 'BT /' + (bold ? 'F2' : 'F1') + ' ' + f2(size) + ' Tf ' + f2(tx) + ' ' + f2(this.H - y) + ' Td ' + pstr(s) + ' Tj ET');
   };
+  Pdf.prototype.line = function (x1, y1, x2, y2, w) { this.ops.push(f2(w || 0.6) + ' w 0 G ' + f2(x1) + ' ' + f2(this.H - y1) + ' m ' + f2(x2) + ' ' + f2(this.H - y2) + ' l S'); };
   Pdf.prototype.rect = function (x, y, w, h, fill, stroke) {
     const r = f2(x) + ' ' + f2(this.H - y - h) + ' ' + f2(w) + ' ' + f2(h) + ' re';
     if (fill) this.ops.push(fill + ' rg ' + r + ' f');
@@ -323,9 +329,10 @@
       pdf.y = pdf.M + 16;
       return;
     }
-    pdf.text(cx, pdf.M + 10, d.judul, 13, true, 'c');
-    pdf.text(cx, pdf.M + 26, d.instansi, 10.5, true, 'c');
-    let y = pdf.M + 46;
+    const top = kopPdf(pdf) + 6;
+    pdf.text(cx, top + 10, d.judul, 13, true, 'c');
+    pdf.text(cx, top + 26, d.instansi, 10.5, true, 'c');
+    let y = top + 46;
     d.info.forEach(function (kv) {
       pdf.text(pdf.M, y, kv[0], 9, false, 'l');
       pdf.text(pdf.M + 112, y, ': ' + kv[1], 9, kv[2] === 'b', 'l');
@@ -333,6 +340,63 @@
     });
     pdf.y = y + 4;
   }
+  /** Kop surat di pojok kiri atas (dapat diubah di js/config.js → KOP). */
+  function kopBaris() {
+    const k = (window.SIPL_CONFIG || {}).KOP;
+    return Array.isArray(k) && k.length ? k.map(String) : ['KEPOLISIAN NEGARA REPUBLIK INDONESIA', 'DAERAH PAPUA BARAT', 'SEKOLAH POLISI NEGARA'];
+  }
+  function kopPdf(pdf) {
+    const L = kopBaris(), size = 9, w = Math.max.apply(null, L.map(function (l) { return wOf(l, size, true); })), cx = pdf.M + w / 2;
+    let y = pdf.M + 8;
+    L.forEach(function (l) { pdf.text(cx, y, l, size, true, 'c'); y += 11; });
+    pdf.line(pdf.M, y - 7, pdf.M + w, y - 7, 0.8);
+    return y + 6;
+  }
+  /** Kop Excel: baris 1–3 di kolom A–C (rata tengah), garis bawah pada baris terakhir. */
+  function kopXlsx(rows, merges) {
+    const L = kopBaris();
+    L.forEach(function (l, i) {
+      const st = i === L.length - 1 ? X.kopAkhir : X.kop;
+      rows[i] = [{ v: l, s: st }, { v: '', s: st }, { v: '', s: st }];
+      merges.push('A' + (i + 1) + ':C' + (i + 1));
+    });
+  }
+
+  /** Kolom tanda tangan di kanan bawah: kota & tanggal, jabatan, ruang kosong, nama (garis bawah), NRP. */
+  function ttdBaris(t) {
+    t = t || {};
+    return {
+      atas: [(t.kota ? t.kota + ', ' : '') + (t.tanggal || ''), t.jabatan || 'GADIK PENGAMPU MATA PELAJARAN'],
+      nama: t.nama || '',
+      bawah: t.nrp ? (t.pangkat && t.nama && String(t.nama).indexOf(t.pangkat) !== 0 ? t.pangkat + ' ' : '') + 'NRP ' + t.nrp : (t.nama ? '' : 'NRP ..............................')
+    };
+  }
+  function ttdPdf(pdf, t) {
+    if (!t) return;
+    const b = ttdBaris(t), w = 230, cx = pdf.W - pdf.M - w / 2, need = 118;
+    if (pdf.y + need > pdf.H - pdf.M - 14) pdf.add();
+    let y = pdf.y + 22;
+    b.atas.forEach(function (s, i) { pdf.text(cx, y, s, 9.5, i === 1, 'c'); y += 13; });
+    y += 52;                                                         // ruang kosong untuk tanda tangan
+    const nama = b.nama || '( .................................................. )';
+    pdf.text(cx, y, nama, 9.5, !!b.nama, 'c');
+    if (b.nama) { const nw = wOf(nama, 9.5, true); pdf.line(cx - nw / 2, y + 2, cx + nw / 2, y + 2, 0.7); }
+    y += 13;
+    if (b.bawah) pdf.text(cx, y, b.bawah, 9, false, 'c');
+    pdf.y = y + 8;
+  }
+  /** Baris tanda tangan Excel di kolom paling kanan (gabungan c0..c1), mulai baris r. */
+  function ttdXlsx(rows, merges, heights, t, r, c0, c1) {
+    if (!t) return;
+    const b = ttdBaris(t);
+    const put = function (rr, v, st) { const row = rows[rr] = rows[rr] || []; row[c0] = { v: v, s: st }; for (let c = c0 + 1; c <= c1; c++) row[c] = { v: '', s: st }; if (c1 > c0) merges.push(ref(c0, rr) + ':' + ref(c1, rr)); };
+    put(r, b.atas[0], X.ttd);
+    put(r + 1, b.atas[1], X.ttd);
+    heights[r + 2] = 22; heights[r + 3] = 22; heights[r + 4] = 22;
+    put(r + 5, b.nama || '( ................................................ )', b.nama ? X.ttdNama : X.ttd);
+    if (b.bawah) put(r + 6, b.bawah, X.ttd);
+  }
+
   function footerFn(d) {
     const at = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; };
     const stamp = at.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jayapura' }) + ' ' +
@@ -343,8 +407,9 @@
   // ==========================================================================
   // Format PENILAIAN PROLAT
   // ==========================================================================
-  const HEAD_ROW = 8;               // baris kepala tabel (0-based) → baris Excel 9–10
-  const BODY_ROW = HEAD_ROW + 2;    // baris peserta pertama → baris Excel 11
+  const KOP = 4;                    // baris 1–3 kop, baris 4 kosong
+  const HEAD_ROW = KOP + 8;         // baris kepala tabel (0-based) → baris Excel 13–14
+  const BODY_ROW = HEAD_ROW + 2;    // baris peserta pertama → baris Excel 15
 
   function aspekOf(fmt) { return fmt.ASPEK; }
   function jumlahGrup(v, fmt) {
@@ -359,7 +424,7 @@
   /** Kepala & isi tabel HARI: NO · NAMA · PANGKAT/NRP · [butir… JUMLAH] per aspek. */
   function lembarHari(d, name) {
     const fmt = d.format, A = aspekOf(fmt);
-    const cols = [5, 34, 26];
+    const cols = [5, 30, 22];
     const head1 = [{ v: 'NO', s: X.th }, { v: 'NAMA', s: X.th }, { v: 'PANGKAT / NRP', s: X.th }];
     const head2 = [{ v: '', s: X.th }, { v: '', s: X.th }, { v: '', s: X.th }];
     const merges = ['A' + (HEAD_ROW + 1) + ':A' + (HEAD_ROW + 2), 'B' + (HEAD_ROW + 1) + ':B' + (HEAD_ROW + 2), 'C' + (HEAD_ROW + 1) + ':C' + (HEAD_ROW + 2)];
@@ -369,19 +434,20 @@
       head1.push({ v: g.nama.toUpperCase(), s: X.th });
       for (let k = 1; k < g.butir.length; k++) head1.push({ v: '', s: X.th });
       merges.push(ref(c, HEAD_ROW) + ':' + ref(c + g.butir.length - 1, HEAD_ROW));
-      g.butir.forEach(function (b) { head2.push({ v: b, s: X.th }); cols.push(8.5); });
+      g.butir.forEach(function (b) { head2.push({ v: b, s: X.th }); cols.push(6.5); });
       c += g.butir.length;
       head1.push({ v: 'JUMLAH', s: X.th }); head2.push({ v: '', s: X.th });
       merges.push(ref(c, HEAD_ROW) + ':' + ref(c, HEAD_ROW + 1));
-      sumCols.push(c); cols.push(10);
+      sumCols.push(c); cols.push(9);
       c++;
     });
     const lastCol = c - 1;
     const rows = [];
-    rows[0] = [{ v: d.judul, s: X.title }];
-    rows[1] = [{ v: d.instansi, s: X.sub }];
-    merges.push('A1:' + ref(lastCol, 0), 'A2:' + ref(lastCol, 1));
-    (d.info || []).slice(0, 5).forEach(function (kv, i) { rows[3 + i] = [null, { v: kv[0], s: X.label }, { v: ': ' + kv[1], s: X.label }]; });
+    kopXlsx(rows, merges);
+    rows[KOP] = [{ v: d.judul, s: X.title }];
+    rows[KOP + 1] = [{ v: d.instansi, s: X.sub }];
+    merges.push(ref(0, KOP) + ':' + ref(lastCol, KOP), ref(0, KOP + 1) + ':' + ref(lastCol, KOP + 1));
+    (d.info || []).slice(0, 5).forEach(function (kv, i) { rows[KOP + 3 + i] = [null, { v: kv[0], s: X.label }, { v: ': ' + kv[1], s: X.label }]; });
     rows[HEAD_ROW] = head1; rows[HEAD_ROW + 1] = head2;
     d.peserta.forEach(function (p, i) {
       const r = BODY_ROW + i, v = (d.nilai && d.nilai[i]) || [], row = [{ v: i + 1, s: X.tdc }, { v: p.nama, s: X.td }, { v: p.pn, s: X.td }];
@@ -397,7 +463,9 @@
     });
     const endRow = BODY_ROW + d.peserta.length;
     rows[endRow + 1] = [null, { v: 'Skor tiap butir 0–' + fmt.SKOR_MAX + '. JUMLAH = penjumlahan butir (butir kosong dihitung 0).', s: X.note }];
-    return { name: name, cols: cols, rows: rows, merges: merges, freeze: BODY_ROW, landscape: true, sumCols: sumCols, heights: { 0: 22, [HEAD_ROW]: 20, [HEAD_ROW + 1]: 18 } };
+    const heights = { [KOP]: 22, [HEAD_ROW]: 30, [HEAD_ROW + 1]: 18 };
+    ttdXlsx(rows, merges, heights, d.ttd, endRow + 3, lastCol - 6, lastCol);
+    return { name: name, cols: cols, rows: rows, merges: merges, freeze: BODY_ROW, landscape: false, sumCols: sumCols, heights: heights };
   }
 
   function hitungAkhir(d) {
@@ -424,10 +492,11 @@
     const titles = ['NO', 'NAMA', 'PANGKAT / NRP'].concat(A.map(function (g) { return 'JUMLAH ' + g.nama.toUpperCase(); }), ['NIL AKHIR', 'RANK']);
     const rows = [], merges = [];
     const lastCol = titles.length - 1, cNA = 3 + A.length, cRank = cNA + 1;
-    rows[0] = [{ v: d.judul, s: X.title }];
-    rows[1] = [{ v: d.instansi, s: X.sub }];
-    merges.push('A1:' + ref(lastCol, 0), 'A2:' + ref(lastCol, 1));
-    (d.info || []).slice(0, 5).forEach(function (kv, i) { rows[3 + i] = [null, { v: kv[0], s: X.label }, { v: ': ' + kv[1], s: X.label }]; });
+    kopXlsx(rows, merges);
+    rows[KOP] = [{ v: d.judul, s: X.title }];
+    rows[KOP + 1] = [{ v: d.instansi, s: X.sub }];
+    merges.push(ref(0, KOP) + ':' + ref(lastCol, KOP), ref(0, KOP + 1) + ':' + ref(lastCol, KOP + 1));
+    (d.info || []).slice(0, 5).forEach(function (kv, i) { rows[KOP + 3 + i] = [null, { v: kv[0], s: X.label }, { v: ': ' + kv[1], s: X.label }]; });
     rows[HEAD_ROW] = titles.map(function (t) { return { v: t, s: X.th }; });
     rows[HEAD_ROW + 1] = titles.map(function () { return { v: '', s: X.th }; });
     titles.forEach(function (t, c) { merges.push(ref(c, HEAD_ROW) + ':' + ref(c, HEAD_ROW + 1)); });
@@ -450,16 +519,18 @@
     rows[e] = [null, { v: 'Keterangan:', s: X.note }];
     rows[e + 1] = [null, { v: 'Nilai aspek = jumlah aspek seluruh hari ÷ ' + n + ' hari ÷ banyak butir × 10 (skor butir 0–' + fmt.SKOR_MAX + ').', s: X.note }];
     rows[e + 2] = [null, { v: 'NIL AKHIR = ' + A.map(function (g) { return g.nama.replace('Aspek ', '') + ' × ' + Math.round(g.bobot * 100) + '%'; }).join(' + ') + '. RANK dari NIL AKHIR tertinggi.', s: X.note }];
-    return { name: 'NIL AKHIR', cols: cols, rows: rows, merges: merges, freeze: BODY_ROW, landscape: false, active: true, heights: { 0: 22, [HEAD_ROW]: 22, [HEAD_ROW + 1]: 22 } };
+    const heights = { [KOP]: 22, [HEAD_ROW]: 22, [HEAD_ROW + 1]: 22 };
+    ttdXlsx(rows, merges, heights, d.ttd, e + 4, lastCol - 3, lastCol);
+    return { name: 'NIL AKHIR', cols: cols, rows: rows, merges: merges, freeze: BODY_ROW, landscape: false, active: true, heights: heights };
   }
 
   function pdfHari(d) {
     const fmt = d.format, A = aspekOf(fmt);
-    const widths = [22, 175, 120], head1 = [{ t: 'NO', rs: 2 }, { t: 'NAMA', rs: 2 }, { t: 'PANGKAT / NRP', rs: 2 }], head2 = [], align = ['c', 'l', 'l'], bold = [];
+    const widths = [20, 145, 100], head1 = [{ t: 'NO', rs: 2 }, { t: 'NAMA', rs: 2 }, { t: 'PANGKAT / NRP', rs: 2 }], head2 = [], align = ['c', 'l', 'l'], bold = [];
     A.forEach(function (g) {
       head1.push({ t: g.nama.toUpperCase(), cs: g.butir.length });
-      g.butir.forEach(function (b) { head2.push({ t: b }); widths.push(34); align.push('c'); });
-      head1.push({ t: 'JUMLAH', rs: 2 }); widths.push(46); align.push('c'); bold.push(widths.length - 1);
+      g.butir.forEach(function (b) { head2.push({ t: b }); widths.push(23); align.push('c'); });
+      head1.push({ t: 'JUMLAH', rs: 2 }); widths.push(40); align.push('c'); bold.push(widths.length - 1);
     });
     const body = d.peserta.map(function (p, i) {
       const v = (d.nilai && d.nilai[i]) || [], sums = jumlahGrup(v, fmt), row = [i + 1, p.nama, p.pn];
@@ -467,10 +538,11 @@
       A.forEach(function (g, gi) { g.butir.forEach(function () { row.push(skorTeks(v[bi++])); }); row.push(sums[gi].any ? skorTeks(sums[gi].sum) : '0'); });
       return row;
     });
-    const pdf = new Pdf(true);
-    table(pdf, { widths: widths, head: [head1, head2], body: body, align: align, bold: bold, size: 8.5, rowH: 15, headH: 15, title: function (p, first) { judulPdf(p, d, first); } });
+    const pdf = new Pdf(false);                                   // A4 potrait
+    table(pdf, { widths: widths, head: [head1, head2], body: body, align: align, bold: bold, size: 8, rowH: 15, headH: 18, title: function (p, first) { judulPdf(p, d, first); } });
     pdf.y += 12;
     if (pdf.y < pdf.H - pdf.M - 20) pdf.text(pdf.M, pdf.y, 'Skor tiap butir 0–' + fmt.SKOR_MAX + '. JUMLAH = penjumlahan butir (butir kosong dihitung 0).', 7.5, false, 'l', true);
+    ttdPdf(pdf, d.ttd);
     return pdf.blob(footerFn(d));
   }
 
@@ -490,6 +562,7 @@
     pdf.y += 12;
     if (pdf.y + 26 > pdf.H - pdf.M - 14) pdf.add();
     notes.forEach(function (t) { pdf.text(pdf.M, pdf.y, t, 7.5, false, 'l', true); pdf.y += 11; });
+    ttdPdf(pdf, d.ttd);
     return pdf.blob(footerFn(d));
   }
 
@@ -509,7 +582,7 @@
     /** d: { judul, instansi, info, format, peserta, hari:[{ label, judul, info, nilai:[[7]] }], hasil? } */
     akhirXlsx: function (d) {
       const sheets = d.hari.map(function (h) {
-        return lembarHari({ judul: h.judul, instansi: d.instansi, info: h.info, format: d.format, peserta: d.peserta, nilai: h.nilai }, h.label);
+        return lembarHari({ judul: h.judul, instansi: d.instansi, info: h.info, format: d.format, peserta: d.peserta, nilai: h.nilai, ttd: h.ttd }, h.label);
       });
       return xlsx(sheets.concat([lembarAkhir(d, sheets)]));
     },

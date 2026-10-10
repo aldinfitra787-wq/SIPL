@@ -6,7 +6,7 @@
 
 const CFG = Object.assign({ GAS_URL: '', APP_NAME: 'SIPL — SPN Polda Papua Barat', IDLE_MINUTES: 60, TAHUN_AJARAN: '' }, window.SIPL_CONFIG || {});
 const GAS_URL = String(CFG.GAS_URL || '').trim();
-const FE_VERSION = '1.3.1';              // naikkan bersama ?v= di index.html saat rilis
+const FE_VERSION = '1.4.1';              // naikkan bersama ?v= di index.html saat rilis
 const LS = 'sipl:v1:';
 const TZ = 'Asia/Jayapura';
 const HARI = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
@@ -309,6 +309,14 @@ function hariPenilaian(sesi) {
   return out;
 }
 
+/** Label HARI dihitung per mata pelajaran (1 mapel = 6 hari): { ID_Sesi: 'HARI n' }. */
+function labelHariMapel(sesi) {
+  const by = {}, out = {};
+  (sesi || []).forEach(x => { (by[x.ID_Mapel] = by[x.ID_Mapel] || []).push(x); });
+  Object.keys(by).forEach(m => hariPenilaian(by[m]).forEach(u => { out[u.s.ID_Sesi] = u.label; }));
+  return out;
+}
+
 /**
  * NIL AKHIR per peserta sesuai rumus berkas Excel:
  *   aspek = Σ JUMLAH aspek seluruh hari ÷ n hari ÷ banyak butir × 10
@@ -328,6 +336,16 @@ function rekapAkhir(d, pesertaList) {
     r.rank = 1 + rows.filter((o, j) => { const ok = Math.round(o.na * 1e6); return ok > k || (ok === k && j < i); }).length;
   });
   return { units, n, rows };
+}
+
+/** Data kolom tanda tangan Gadik pengampu (PDF/Excel). */
+function ttdGadik(idGadik, tanggal) {
+  const g = idGadik ? R().gadik[idGadik] : null, me = S.me || {};
+  const self = S.role === 'Gadik' && me.ID_Gadik && me.ID_Gadik === idGadik;
+  return {
+    kota: CFG.KOTA === undefined ? 'Manokwari' : CFG.KOTA, tanggal: tglPanjang(tanggal || todayStr()), jabatan: 'GADIK PENGAMPU MATA PELAJARAN',
+    nama: self ? me.Nama_Lengkap : g ? g.Nama_Lengkap : '', nrp: self ? me.NRP : g ? g.NRP || '' : '', pangkat: self ? me.Pangkat : g ? g.Pangkat || '' : ''
+  };
 }
 
 /** Tanggal panjang Indonesia: "Senin, 5 Oktober 2026". */
@@ -407,24 +425,58 @@ function kelasList() { return sortKelas(S.boot ? S.boot.ref.kelas : []); }
 function pelOf(idKelas) { return (S.boot ? S.boot.ref.peleton : []).filter(p => !idKelas || p.ID_Kelas === idKelas).sort((a, b) => collator.compare(a.Nama_Peleton, b.Nama_Peleton)); }
 function mapelList(activeOnly) { return (S.boot ? S.boot.ref.mapel : []).filter(m => !activeOnly || isAktif(m.Status)).sort((a, b) => collator.compare(a.Nama_Mapel, b.Nama_Mapel)); }
 
-/** Deteksi bentrok jadwal di klien (Gadik atau kelas sama, hari sama, jam tumpang tindih). */
+// --------------------------------------------------------------------------
+// Jadwal pelatihan: satu mapel = blok 6 hari (Senin–Sabtu), pukul 08.00–17.00 WIT
+// --------------------------------------------------------------------------
+const JADWAL = { HARI_BLOK: 6, HARI_DEFAULT: ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'], JAM_MULAI: '08:00', JAM_SELESAI: '17:00' };
+function hariList(j) { const v = typeof j === 'string' ? j : (j && j.Hari) || ''; return String(v).split(',').map(x => x.trim()).filter(x => HARI.indexOf(x) > -1).sort((a, b) => HARI.indexOf(a) - HARI.indexOf(b)); }
+/** "Senin–Sabtu" bila berurutan, selain itu "Senin, Rabu". */
+function hariTeks(j) {
+  const l = hariList(j), ix = l.map(h => HARI.indexOf(h));
+  if (l.length > 2 && ix.every((x, k) => !k || x === ix[k - 1] + 1)) return l[0] + '–' + l[l.length - 1];
+  return l.join(', ');
+}
+/** Dilaksanakan pada tanggal ini? (hari pelaksanaan + rentang tanggal; jadwal lama tanpa tanggal = tiap pekan). */
+function jadwalAktif(j, tgl) {
+  if (hariList(j).indexOf(hariOf(tgl)) === -1) return false;
+  return !(j.Tanggal_Mulai && tgl < j.Tanggal_Mulai) && !(j.Tanggal_Selesai && tgl > j.Tanggal_Selesai);
+}
+/** Penutupan dimajukan ke Jumat → lembar hari Sabtu boleh diisi sejak Jumat. */
+function bolehIsiAwal(j, tgl) { return j.Tutup_Jumat === 'Ya' && hariOf(tgl) === 'Sabtu' && tgl === addDays(todayStr(), 1) && jadwalAktif(j, tgl); }
+function tglRingkas(t) { const p = tglParts(t); return p ? p[2] + ' ' + BULAN_P[p[1] - 1].slice(0, 3) + ' ' + p[0] : ''; }
+/** "12–17 Okt 2026 • Senin–Sabtu" atau "Setiap Senin" (jadwal lama). */
+function rentangJadwal(j) {
+  if (!j.Tanggal_Mulai) return 'Setiap ' + hariTeks(j);
+  const a = tglParts(j.Tanggal_Mulai), b = tglParts(j.Tanggal_Selesai || j.Tanggal_Mulai);
+  const tg = a[0] === b[0] && a[1] === b[1] ? a[2] + '–' + b[2] + ' ' + BULAN_P[a[1] - 1].slice(0, 3) + ' ' + a[0] : tglRingkas(j.Tanggal_Mulai) + ' – ' + tglRingkas(j.Tanggal_Selesai);
+  return tg + ' • ' + hariTeks(j);
+}
+/** Tanggal-tanggal pelaksanaan (untuk blok bertanggal). */
+function tanggalJadwal(j) {
+  const out = [];
+  if (!j.Tanggal_Mulai) return out;
+  for (let t = j.Tanggal_Mulai, n = 0; t <= (j.Tanggal_Selesai || j.Tanggal_Mulai) && n < 400; t = addDays(t, 1), n++) if (hariList(j).indexOf(hariOf(t)) > -1) out.push(t);
+  return out;
+}
+function jadwalTumpang(a, b) {
+  const hb = hariList(b);
+  if (!hariList(a).some(h => hb.indexOf(h) > -1)) return false;
+  const a1 = a.Tanggal_Mulai || '0000', a2 = a.Tanggal_Selesai || '9999', b1 = b.Tanggal_Mulai || '0000', b2 = b.Tanggal_Selesai || '9999';
+  if (a2 < b1 || b2 < a1) return false;
+  return menit(a.Jam_Mulai) < menit(b.Jam_Selesai) && menit(b.Jam_Mulai) < menit(a.Jam_Selesai);
+}
+
+/** Deteksi bentrok jadwal di klien (Gadik atau kelas sama, hari & tanggal beririsan, jam tumpang tindih). */
 function findConflicts(list) {
-  const out = {};
-  const byDay = {};
-  (list || []).forEach(j => { (byDay[j.Hari] = byDay[j.Hari] || []).push(j); });
-  Object.keys(byDay).forEach(h => {
-    const arr = byDay[h];
-    for (let i = 0; i < arr.length; i++) {
-      for (let k = i + 1; k < arr.length; k++) {
-        const a = arr[i], b = arr[k];
-        const overlap = menit(a.Jam_Mulai) < menit(b.Jam_Selesai) && menit(b.Jam_Mulai) < menit(a.Jam_Selesai);
-        if (!overlap) continue;
-        const why = a.ID_Gadik === b.ID_Gadik ? 'GADIK' : (a.ID_Kelas === b.ID_Kelas ? 'KELAS' : '');
-        if (!why) continue;
-        (out[a.ID_Jadwal] = out[a.ID_Jadwal] || []).push({ id: b.ID_Jadwal, why });
-        (out[b.ID_Jadwal] = out[b.ID_Jadwal] || []).push({ id: a.ID_Jadwal, why });
-      }
+  const out = {}, arr = list || [];
+  for (let i = 0; i < arr.length; i++) {
+    for (let k = i + 1; k < arr.length; k++) {
+      const a = arr[i], b = arr[k];
+      const why = a.ID_Gadik === b.ID_Gadik ? 'GADIK' : (a.ID_Kelas === b.ID_Kelas ? 'KELAS' : '');
+      if (!why || !jadwalTumpang(a, b)) continue;
+      (out[a.ID_Jadwal] = out[a.ID_Jadwal] || []).push({ id: b.ID_Jadwal, why });
+      (out[b.ID_Jadwal] = out[b.ID_Jadwal] || []).push({ id: a.ID_Jadwal, why });
     }
-  });
+  }
   return out;
 }

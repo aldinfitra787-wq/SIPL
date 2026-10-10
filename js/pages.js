@@ -291,10 +291,11 @@ function dashAdmin(el) {
 
 function todaySessions(jadwal) {
   const now = nowWIT();
-  return jadwal.filter(j => j.Hari === now.hari).sort((a, b) => menit(a.Jam_Mulai) - menit(b.Jam_Mulai));
+  const t = todayStr();
+  return jadwal.filter(j => jadwalAktif(j, t)).sort((a, b) => menit(a.Jam_Mulai) - menit(b.Jam_Mulai));
 }
 function sessionState(j, now) {
-  if (j.Hari !== now.hari) return '';
+  if (!jadwalAktif(j, todayStr())) return '';
   if (now.min >= menit(j.Jam_Selesai)) return 'done';
   if (now.min >= menit(j.Jam_Mulai)) return 'now';
   return 'next';
@@ -322,6 +323,7 @@ function dashGadik(el) {
   const nDone = today.filter(j => ss[j.ID_Jadwal] && ss[j.ID_Jadwal].Status === 'Selesai').length;
   const pct = today.length ? Math.round(nDone / today.length * 100) : 0;
   const draf = ((b.stat && b.stat.sesiDraf) || []).filter(x => x.Tanggal !== tgl && mine.some(j => j.ID_Jadwal === x.ID_Jadwal));
+  const besok = addDays(tgl, 1), awal = mine.filter(j => bolehIsiAwal(j, besok));
   el.innerHTML =
     pageHead({
       eyebrow: 'Penilaian Harian // Tenaga Pendidik',
@@ -331,12 +333,14 @@ function dashGadik(el) {
       actions: today.length ? '<a class="btn primary" href="' + nilaiHref(tgl) + '">' + icon('pen') + 'Input Nilai Hari Ini</a>' : ''
     }) +
     '<div class="notice"><div class="icon-tile">' + icon('shield-check') + '</div><div><b>Hak akses terbatas pada kelas penugasan</b><p>Anda hanya dapat melihat dan mengubah data peserta serta nilai sesi yang Anda ajar di kelas penugasan. Data kelas lain tidak dapat diakses.</p></div></div>' +
+    (awal.length ? '<div class="notice"><div class="icon-tile">' + icon('calendar') + '</div><div class="grow"><b>Penutupan dimajukan ke Jumat</b><p>Nilai hari Sabtu (' + esc(fmt.tgl(besok, { short: true })) + ') sudah dapat diisi hari ini.</p><div class="draf-list">' +
+      awal.map(j => '<a class="btn primary xs" href="' + nilaiHref(besok, j.ID_Jadwal) + '">' + icon('pen', 'sm') + 'Isi nilai Sabtu • ' + esc(mapelName(j.ID_Mapel)) + ' (' + esc(kelasName(j.ID_Kelas)) + ')</a>').join('') + '</div></div></div>' : '') +
     (kelas.length ? '' : '<div class="notice red"><div class="icon-tile">' + icon('alert-triangle') + '</div><div><b>Belum ada penugasan kelas</b><p>Hubungi Admin Satdik agar akun Anda ditugaskan ke kelas.</p></div></div>') +
     '<div class="grid c3">' +
       '<div class="card pad"><div class="row between"><span class="label-mono">Kelas Binaan</span><div class="icon-tile">' + icon('building') + '</div></div>' +
         (kelas.length ? kelas.map(k => '<div class="mt-8"><b style="font-size:18px">' + esc(k.Nama_Kelas) + '</b><div class="muted small">' + esc(k.Nama_Angkatan) + ' • <span class="mono">' + pesertaCount(k.ID_Kelas) + '</span> peserta</div></div>').join('') : '<p class="muted mt-8">—</p>') + '</div>' +
       '<div class="card pad"><div class="row between"><span class="label-mono">Mata Pelajaran Diampu</span><div class="icon-tile">' + icon('book') + '</div></div>' +
-        (mapelIds.length ? mapelIds.map(m => '<div class="mt-8"><b>' + esc(mapelName(m)) + '</b><div class="muted small">' + mine.filter(j => j.ID_Mapel === m).map(j => j.Hari).filter((h, i, a) => a.indexOf(h) === i).join(', ') + '</div></div>').join('') : '<p class="muted mt-8">Belum ada jadwal mengajar.</p>') + '</div>' +
+        (mapelIds.length ? mapelIds.map(m => '<div class="mt-8"><b>' + esc(mapelName(m)) + '</b><div class="muted small">' + mine.filter(j => j.ID_Mapel === m).sort((a, b) => String(b.Tanggal_Mulai).localeCompare(String(a.Tanggal_Mulai))).slice(0, 2).map(j => esc(rentangJadwal(j))).join('<br>') + '</div></div>').join('') : '<p class="muted mt-8">Belum ada jadwal mengajar.</p>') + '</div>' +
       '<div class="card pad"><div class="row between"><span class="label-mono">Nilai Harian Hari Ini</span><div class="icon-tile">' + icon('clipboard-check') + '</div></div>' +
         (today.length
           ? '<div class="stat" style="border:0;box-shadow:none;padding:0;min-height:0;margin-top:8px"><div class="big">' + nDone + '<small>/ ' + today.length + ' sesi</small></div></div>' +
@@ -555,38 +559,42 @@ page('peserta', PesertaPage);
 // JADWAL — lihat saja (Gadik & Pengasuh). Admin memakai versi admin.js.
 // ==========================================================================
 const JadwalView = (() => {
-  const st = { kelas: '', day: '' };
+  const st = { kelas: '', tgl: '' };
   let el;
+  const senin = t => addDays(t, -HARI.indexOf(hariOf(t)));
   function render() {
-    const kel = kelasList();
+    const kel = kelasList(), today = todayStr();
     if (!kel.some(k => k.ID_Kelas === st.kelas)) st.kelas = kel[0] ? kel[0].ID_Kelas : '';
-    const now = nowWIT();
-    if (!st.day) st.day = HARI.slice(0, 6).indexOf(now.hari) > -1 ? now.hari : 'Senin';
+    if (!st.tgl) st.tgl = hariOf(today) === 'Minggu' ? addDays(today, 1) : today;
+    const wk = senin(st.tgl), dates = HARI.map((h, i) => addDays(wk, i));
     const all = S.boot.jadwal.filter(j => j.ID_Kelas === st.kelas);
-    const days = HARI.filter((h, i) => i < 6 || all.some(j => j.Hari === h));
-    const list = all.filter(j => j.Hari === st.day).sort((a, b) => menit(a.Jam_Mulai) - menit(b.Jam_Mulai));
-    const totalMin = all.reduce((s, j) => s + Math.max(0, menit(j.Jam_Selesai) - menit(j.Jam_Mulai)), 0);
+    const week = all.filter(j => dates.some(t => jadwalAktif(j, t)));
+    const days = dates.filter((t, i) => i < 6 || week.some(j => jadwalAktif(j, t)));
+    const list = all.filter(j => jadwalAktif(j, st.tgl)).sort((a, b) => menit(a.Jam_Mulai) - menit(b.Jam_Mulai));
+    const mapelPekan = Array.from(new Set(week.map(j => j.ID_Mapel)));
     const pairLabel = S.role === 'Pengasuh' ? S.boot.scope.pairs.filter(a => a.k === st.kelas).map(a => a.p ? pelName(a.p) : 'Semua peleton').join(', ') : '';
+    const upcoming = all.filter(j => j.Tanggal_Selesai && j.Tanggal_Selesai >= today).sort((a, b) => a.Tanggal_Mulai.localeCompare(b.Tanggal_Mulai));
     el.innerHTML =
       pageHead({
         eyebrow: 'Jadwal Resmi Kelas Binaan // Mode Lihat Saja',
         title: 'Jadwal Pelajaran',
-        desc: st.kelas ? esc(kelasName(st.kelas, true)) + (pairLabel ? ' — ' + esc(pairLabel) : '') : 'Belum ada kelas yang ditugaskan.',
+        desc: st.kelas ? esc(kelasName(st.kelas, true)) + (pairLabel ? ' — ' + esc(pairLabel) : '') + ' • 1 mata pelajaran = 6 hari (Senin–Sabtu), 08.00–17.00 WIT' : 'Belum ada kelas yang ditugaskan.',
         chips: '<span class="chip line">' + icon('eye', 'sm') + 'Hanya lihat</span>',
         actions: kel.length > 1 ? '<select class="select" id="jv-kelas" style="min-width:240px">' + options(kel, 'ID_Kelas', k => k.Nama_Kelas + ' — ' + k.Nama_Angkatan, st.kelas) + '</select>' : ''
       }) +
-      '<div class="notice"><div class="icon-tile">' + icon('lock') + '</div><div><b>Tampilan terisolasi (lihat saja)</b><p>Gadik dan Pengasuh tidak dapat mengubah jadwal. Hubungi Admin Satdik untuk permohonan perubahan jam atau tukar mengajar.</p></div></div>' +
-      '<div class="card"><div class="card-head"><div class="day-chips" role="tablist">' +
-        days.map(h => '<button role="tab" data-day="' + h + '" class="' + (h === st.day ? 'on ' : '') + (h === now.hari ? 'today' : '') + '" aria-selected="' + (h === st.day) + '">' + h + '</button>').join('') +
-      '</div><span class="grow"></span><span class="chip line">' + icon('clock', 'sm') + list.length + ' sesi • WIT</span></div>' +
+      '<div class="notice"><div class="icon-tile">' + icon('lock') + '</div><div><b>Tampilan terisolasi (lihat saja)</b><p>Gadik dan Pengasuh tidak dapat mengubah jadwal. Hubungi Admin Satdik untuk permohonan perubahan tanggal, jam, atau tukar mengajar.</p></div></div>' +
+      '<div class="card"><div class="card-head" style="flex-wrap:wrap"><div class="wk-nav"><button class="btn icon" data-wk="-7" aria-label="Pekan sebelumnya">' + icon('chevron-left') + '</button><div class="wk-t"><b>' + esc(tglRingkas(dates[0]) + ' – ' + tglRingkas(dates[5])) + '</b><small>' + (wk === senin(today) ? 'Pekan ini' : esc(mapelPekan.length ? mapelPekan.map(mapelName).join(', ') : 'Tidak ada mapel')) + '</small></div><button class="btn icon" data-wk="7" aria-label="Pekan berikutnya">' + icon('chevron-right') + '</button></div>' +
+        '<div class="day-chips" role="tablist">' +
+        days.map(t => '<button role="tab" data-tgl="' + t + '" class="' + (t === st.tgl ? 'on ' : '') + (t === today ? 'today' : '') + '" aria-selected="' + (t === st.tgl) + '">' + hariOf(t) + ' <small>' + Number(t.slice(8)) + '</small></button>').join('') +
+      '</div><span class="grow"></span><span class="chip line">' + icon('clock', 'sm') + list.length + ' mapel • WIT</span></div>' +
       '<div class="card-body">' + (list.length ? '<div class="sessions">' + list.map((j, i) => sessionCard(j, i, false)).join('') + '</div>' :
-        emptyState('calendar', 'Tidak ada pelajaran', 'Belum ada jadwal pada hari ' + st.day + ' untuk kelas ini.')) + '</div></div>' +
-      '<div class="grid c3 mt-24">' +
-        stat({ label: 'Sesi per Pekan', value: all.length, unit: 'sesi', icon: 'calendar', cap: 'Seluruh hari untuk kelas ini' }) +
-        stat({ label: 'Total Jam per Pekan', value: fmt.num(totalMin / 60, totalMin % 60 ? 1 : 0), unit: 'jam', icon: 'clock', cap: 'Akumulasi durasi tatap muka' }) +
-        stat({ label: 'Mata Pelajaran', value: new Set(all.map(j => j.ID_Mapel)).size, unit: 'mapel', icon: 'book', cap: 'Diajarkan di kelas ini' }) +
-      '</div>';
-    $$('[data-day]', el).forEach(b => { b.onclick = () => { st.day = b.dataset.day; render(); }; });
+        emptyState('calendar', 'Tidak ada pelajaran', 'Belum ada jadwal pada ' + fmt.tgl(st.tgl, { hari: true }) + ' untuk kelas ini.')) + '</div></div>' +
+      '<div class="card mt-24"><div class="card-head"><div class="icon-tile">' + icon('calendar') + '</div><div class="grow"><h3>Mata pelajaran berjalan &amp; akan datang</h3><div class="sub">Setiap mapel dilaksanakan 6 hari</div></div></div><div class="card-body">' +
+        (upcoming.length ? '<div class="sessions">' + upcoming.slice(0, 8).map(j => '<div class="session"><div class="grow"><div class="row" style="gap:8px"><span class="time">' + esc(rentangJadwal(j)) + '</span>' + (j.Tutup_Jumat === 'Ya' ? '<span class="badge draft">Penutupan Jumat</span>' : '') + '</div><h3 class="mt-8">' + esc(mapelName(j.ID_Mapel)) + '</h3><div class="muted small">' + esc(gadikName(j.ID_Gadik)) + ' • ' + esc(fmt.jam(j.Jam_Mulai)) + '–' + esc(fmt.jam(j.Jam_Selesai)) + ' WIT' + (j.Ruang ? ' • ' + esc(j.Ruang) : '') + '</div></div><button class="btn outline xs" data-goto-tgl="' + esc(j.Tanggal_Mulai < today ? today : j.Tanggal_Mulai) + '">Lihat</button></div>').join('') + '</div>'
+          : '<p class="muted">Belum ada jadwal mapel yang akan datang.</p>') + '</div></div>';
+    $$('[data-tgl]', el).forEach(b => { b.onclick = () => { st.tgl = b.dataset.tgl; render(); }; });
+    $$('[data-wk]', el).forEach(b => { b.onclick = () => { st.tgl = addDays(wk, Number(b.dataset.wk)); render(); }; });
+    $$('[data-goto-tgl]', el).forEach(b => { b.onclick = () => { st.tgl = b.dataset.gotoTgl; render(); }; });
     const ks = $('#jv-kelas', el);
     if (ks) ks.onchange = () => { st.kelas = ks.value; render(); };
   }
@@ -664,9 +672,12 @@ const NilaiPage = (() => {
   const peserta = () => { const j = J(st.jid); return j ? S.boot.peserta.filter(p => p.ID_Kelas === j.ID_Kelas) : []; };
 
   /** Sesi yang diajar Gadik ini pada tanggal tsb (urut jam). Daftar server dipakai bila sudah dimuat. */
+  const myJadwal = () => S.boot.jadwal.filter(j => j.ID_Gadik === S.me.ID_Gadik);
+  /** Tanggal terjauh yang boleh diisi: hari ini, atau Sabtu besok bila penutupan dimajukan ke Jumat. */
+  function maxTgl() { const t = todayStr(), b = addDays(t, 1); return myJadwal().some(j => bolehIsiAwal(j, b)) ? b : t; }
   function mySessions(tgl) {
-    const hari = hariOf(tgl), d = (S.data.harian || {})[tgl];
-    let list = S.boot.jadwal.filter(j => j.ID_Gadik === S.me.ID_Gadik && j.Hari === hari);
+    const d = (S.data.harian || {})[tgl], awal = tgl > todayStr();
+    let list = myJadwal().filter(j => jadwalAktif(j, tgl) && (!awal || bolehIsiAwal(j, tgl)));
     if (d && d.jadwal) { const ok = new Set(d.jadwal); list = list.filter(j => ok.has(j.ID_Jadwal)); }
     return list.sort((a, b) => menit(a.Jam_Mulai) - menit(b.Jam_Mulai));
   }
@@ -710,8 +721,12 @@ const NilaiPage = (() => {
   // ---------- pemilihan tanggal & sesi ----------
   function selectDate(tgl, jid) {
     if (!isTgl(tgl)) return;
-    const today = todayStr();
-    if (tgl > today) { toast('Tanggal belum tiba', 'Nilai hanya dapat diisi untuk hari ini atau tanggal yang sudah lewat.', 'warning'); tgl = today; }
+    const today = todayStr(), mx = maxTgl();
+    if (tgl > mx) {
+      const sab = hariOf(tgl) === 'Sabtu' && tgl === addDays(today, 1);
+      toast('Tanggal belum tiba', sab ? 'Nilai hari Sabtu baru dapat diisi hari Jumat bila penutupan dimajukan ke Jumat (diatur Admin di Jadwal).' : 'Nilai hanya dapat diisi untuk hari ini atau tanggal yang sudah lewat.', 'warning');
+      tgl = mx;
+    }
     flushCurrent();
     const sameDay = tgl === st.tgl;
     st.tgl = tgl;
@@ -789,18 +804,28 @@ const NilaiPage = (() => {
   // ---------- tampilan: kartu sesi ----------
   function renderSesi() {
     const host = $('#nh-sesi', el), d = day(), list = mySessions(st.tgl), today = todayStr();
-    $('#nh-hari', el).textContent = fmt.tgl(st.tgl, { hari: true }) + (st.tgl === today ? ' • hari ini' : '');
+    const mx = maxTgl();
+    $('#nh-hari', el).textContent = fmt.tgl(st.tgl, { hari: true }) + (st.tgl === today ? ' • hari ini' : st.tgl > today ? ' • diisi lebih awal (penutupan dimajukan ke Jumat)' : '');
     const date = $('#nh-date', el);
-    date.max = today;
+    date.max = mx;
     if (date.value !== st.tgl) date.value = st.tgl;
-    $('#nh-next', el).disabled = st.tgl >= today;
+    $('#nh-next', el).disabled = st.tgl >= mx;
+    const qk = $('#nh-quick', el);
+    if (mx > today && !$('[data-quick="1"]', qk)) qk.insertAdjacentHTML('beforeend', '<button type="button" data-quick="1" title="Penutupan dimajukan ke Jumat">Sabtu</button>');
+    if (mx <= today) { const b1 = $('[data-quick="1"]', qk); if (b1) b1.remove(); }
     $$('#nh-quick [data-quick]', el).forEach(b => b.classList.toggle('on', addDays(today, Number(b.dataset.quick)) === st.tgl));
 
     if (!list.length) {
-      const days = Array.from(new Set(S.boot.jadwal.filter(j => j.ID_Gadik === S.me.ID_Gadik).map(j => j.Hari))).sort((a, b) => HARI.indexOf(a) - HARI.indexOf(b));
-      host.innerHTML = days.length
-        ? emptyState('calendar', 'Tidak ada sesi Anda pada hari ' + hariOf(st.tgl), 'Anda mengajar pada hari ' + days.join(', ') + '. Pilih tanggal mengajar terakhir:',
-            '<div class="row" style="justify-content:center;gap:8px">' + days.map(h => { const t = lastDateOf(h, today); return '<button type="button" class="btn outline sm" data-goto="' + t + '">' + esc(fmt.tgl(t, { hari: true, short: true })) + '</button>'; }).join('') + '</div>')
+      const mine = myJadwal(), cand = new Set();
+      mine.forEach(j => {
+        if (j.Tanggal_Mulai) tanggalJadwal(j).forEach(t => { if (t <= mx) cand.add(t); });
+        else hariList(j).forEach(h => cand.add(lastDateOf(h, today)));
+      });
+      const pick = Array.from(cand).sort().reverse().slice(0, 6).reverse();
+      const next = mine.filter(j => j.Tanggal_Mulai && j.Tanggal_Mulai > mx).sort((a, b) => a.Tanggal_Mulai.localeCompare(b.Tanggal_Mulai))[0];
+      host.innerHTML = mine.length
+        ? emptyState('calendar', 'Tidak ada mapel Anda pada ' + fmt.tgl(st.tgl, { hari: true }), (pick.length ? 'Pilih tanggal mengajar Anda:' : 'Belum ada tanggal mengajar yang sudah tiba.') + (next ? ' Jadwal berikutnya: ' + mapelName(next.ID_Mapel) + ', ' + rentangJadwal(next) + '.' : ''),
+            pick.length ? '<div class="row" style="justify-content:center;gap:8px;flex-wrap:wrap">' + pick.map(t => '<button type="button" class="btn outline sm" data-goto="' + t + '">' + esc(fmt.tgl(t, { hari: true, short: true })) + '</button>').join('') + '</div>' : '')
         : emptyState('calendar', 'Belum ada jadwal mengajar', 'Admin Satdik belum menjadwalkan Anda di kelas mana pun. Hubungi Admin Satdik.');
       return;
     }
@@ -813,8 +838,9 @@ const NilaiPage = (() => {
         '<input type="radio" name="nh-sesi" value="' + esc(j.ID_Jadwal) + '"' + (on ? ' checked' : '') + '>' +
         '<span class="sc-top"><span class="time">' + esc(fmt.jam(j.Jam_Mulai)) + '–' + esc(fmt.jam(j.Jam_Selesai)) + ' WIT</span>' +
           (d ? sesiBadge(s, total) : loadErr ? '<span class="badge bad">Gagal memuat</span>' : '<span class="badge empty">Memuat…</span>') + '</span>' +
-        '<strong>' + esc(mapelName(j.ID_Mapel)) + '</strong>' +
+        '<strong>' + esc(mapelName(j.ID_Mapel)) + (tanggalJadwal(j).indexOf(st.tgl) > -1 ? ' <span class="chip line">HARI ' + (tanggalJadwal(j).indexOf(st.tgl) + 1) + ' / ' + tanggalJadwal(j).length + '</span>' : '') + '</strong>' +
         '<span class="muted">' + esc(kelasName(j.ID_Kelas, true)) + ' • ' + total + ' peserta' + (j.Ruang ? ' • ' + esc(j.Ruang) : '') + '</span>' +
+        (st.tgl > today ? '<span class="sc-pend">' + icon('info', 'sm') + 'Penutupan dimajukan ke Jumat — nilai Sabtu diisi hari ini</span>' : '') +
         (pend ? '<span class="sc-pend">' + icon('clock', 'sm') + pend + ' nilai belum terkirim dari perangkat ini</span>' : '') +
       '</label>';
     }).join('') + '</div>' +
@@ -1014,9 +1040,10 @@ const NilaiPage = (() => {
       judul: 'PENILAIAN HARIAN PESERTA PELATIHAN', instansi: String(CFG.INSTANSI || 'SPN Polda Papua Barat').toUpperCase(),
       ringkas: kelasName(j.ID_Kelas) + ' • ' + mapelName(j.ID_Mapel) + ' • ' + fmt.tgl(st.tgl),
       info: [['Kelas', kelasName(j.ID_Kelas, true)], ['Mata Pelajaran', mapelName(j.ID_Mapel)],
-        ['Hari / Tanggal', tglPanjang(st.tgl, true) + ' • ' + fmt.jam(j.Jam_Mulai) + '–' + fmt.jam(j.Jam_Selesai) + ' WIT'],
+        ['Hari / Tanggal', tglPanjang(st.tgl, true) + (tanggalJadwal(j).indexOf(st.tgl) > -1 ? ' (HARI ' + (tanggalJadwal(j).indexOf(st.tgl) + 1) + ')' : '') + ' • ' + fmt.jam(j.Jam_Mulai) + '–' + fmt.jam(j.Jam_Selesai) + ' WIT'],
         ['Gadik', gadikName(j.ID_Gadik)], ['Status', locked() ? 'Selesai — sudah masuk rekap' : 'Draf — belum dikirim ke rekap']],
-      format: PENILAIAN, sheet: 'PENILAIAN HARIAN',
+      format: PENILAIAN, sheet: tanggalJadwal(j).indexOf(st.tgl) > -1 ? 'HARI ' + (tanggalJadwal(j).indexOf(st.tgl) + 1) : 'PENILAIAN HARIAN',
+      ttd: ttdGadik(j.ID_Gadik, st.tgl),
       peserta: all.map(p => ({ nama: p.Nama_Lengkap, pn: pangkatNrp(p) })), nilai: all.map(p => valueOf(p.ID_Peserta))
     };
     unduhBerkas(kind === 'pdf' ? 'hariPdf' : 'hariXlsx', data, namaBerkas(['Penilaian-Harian', kelasName(j.ID_Kelas), mapelName(j.ID_Mapel), st.tgl], kind === 'pdf' ? 'pdf' : 'xlsx'), btn);
@@ -1124,9 +1151,22 @@ function rumusAkhir() {
   return PENILAIAN.ASPEK.map(g => g.nama.replace('Aspek ', '') + ' ' + Math.round(g.bobot * 100) + '%').join(' + ');
 }
 const RekapAkhirPage = (() => {
-  const st = { kelas: '', pel: '', q: '', urut: 'abjad' };
+  const st = { kelas: '', pel: '', q: '', urut: 'abjad', mapel: null };   // mapel null = pilih otomatis (mapel terbaru)
   let el, err = null, table = null, hasil = null;
   const data = k => (S.data.rekap || {})[k];
+  /** Mapel yang punya penilaian terkirim, terbaru dulu. */
+  function mapelAda(d) {
+    const last = {};
+    (d ? d.sesi : []).filter(x => x.Status === 'Selesai').forEach(x => { if (!last[x.ID_Mapel] || x.Tanggal > last[x.ID_Mapel]) last[x.ID_Mapel] = x.Tanggal; });
+    return Object.keys(last).sort((a, b) => last[b].localeCompare(last[a]));
+  }
+  /** Data rekap tersaring per mata pelajaran (1 mapel = 6 hari, sesuai berkas PROLAT). */
+  function dataMapel(d) {
+    if (!d) return d;
+    const ada = mapelAda(d);
+    if (st.mapel === null || (st.mapel && ada.indexOf(st.mapel) === -1)) st.mapel = ada.length ? ada[0] : '';
+    return st.mapel ? Object.assign({}, d, { sesi: d.sesi.filter(x => x.ID_Mapel === st.mapel) }) : d;
+  }
 
   function load(k, force) {
     S.data.rekap = S.data.rekap || {};
@@ -1149,7 +1189,7 @@ const RekapAkhirPage = (() => {
   }
   function kelasCard(k) {
     const d = data(k.ID_Kelas) || cacheGet('rekap:' + k.ID_Kelas);
-    const n = d ? hariPenilaian(d.sesi).length : null, draf = d ? d.sesi.filter(s => s.Status !== 'Selesai').length : 0;
+    const n = d && Array.isArray(d.sesi) ? hariPenilaian(d.sesi).length : null, draf = d && Array.isArray(d.sesi) ? d.sesi.filter(s => s.Status !== 'Selesai').length : 0;
     return '<a class="shortcut kelas-card" href="#/rekap-akhir/' + encodeURIComponent(k.ID_Kelas) + '">' +
       '<div class="row between"><div class="icon-tile">' + icon('medal') + '</div>' + (isAktif(k.Status) ? '' : '<span class="badge off">Nonaktif</span>') + '</div>' +
       '<h3>' + esc(k.Nama_Kelas) + '</h3><p>' + esc(k.Nama_Angkatan) + '</p>' +
@@ -1174,6 +1214,7 @@ const RekapAkhirPage = (() => {
     }) +
       '<div class="grid c4 keep2" id="ra-stats"></div><div id="ra-note"></div>' +
       '<div class="card mt-24"><div class="toolbar">' +
+        '<div class="field"><label for="ra-mapel">Mata pelajaran</label><select id="ra-mapel" class="select"></select></div>' +
         '<div class="field narrow"><label for="ra-pel">Peleton</label><select id="ra-pel" class="select">' + options(pelOf(st.kelas), 'ID_Peleton', p => p.Nama_Peleton, st.pel, 'Semua') + '</select></div>' +
         '<div class="field search"><label for="ra-q">Cari peserta</label><div class="input-wrap">' + icon('search', 'lead') + '<input id="ra-q" class="input with-lead" placeholder="Nama atau NRP…" autocomplete="off" value="' + esc(st.q) + '"></div></div>' +
         '<div class="field narrow"><label>Urutkan</label><div class="seg" id="ra-urut"><button type="button" data-urut="abjad">Abjad</button><button type="button" data-urut="rank">Peringkat</button></div></div>' +
@@ -1181,6 +1222,7 @@ const RekapAkhirPage = (() => {
       '</div><div id="ra-table"></div></div>';
     $('#ra-refresh', el).onclick = () => load(st.kelas, true);
     $('#ra-pel', el).onchange = e => { st.pel = e.target.value; fill(); };
+    $('#ra-mapel', el).onchange = e => { st.mapel = e.target.value; fill(); };
     $('#ra-q', el).addEventListener('input', debounce(e => { st.q = e.target.value; fill(); }, 250));
     $('#ra-urut', el).onclick = e => { const b = e.target.closest('[data-urut]'); if (b) { st.urut = b.dataset.urut; table.sort = { key: st.urut === 'rank' ? 'rank' : 'no', dir: 'asc' }; fill(); } };
     el.querySelector('.card').addEventListener('click', e => { const b = e.target.closest('[data-unduh]'); if (b) ekspor(b.dataset.unduh, b); });
@@ -1208,8 +1250,12 @@ const RekapAkhirPage = (() => {
   function fill() {
     if (!el || !table) return;
     $$('#ra-urut [data-urut]', el).forEach(b => b.classList.toggle('on', b.dataset.urut === st.urut));
-    const d = data(st.kelas);
-    if (!d) { $('#ra-table', el).innerHTML = err ? errorState(err) : skeletonRows(8, 7); $('#ra-stats', el).innerHTML = ''; $('#ra-note', el).innerHTML = ''; return; }
+    const d0 = data(st.kelas);
+    if (!d0) { $('#ra-table', el).innerHTML = err ? errorState(err) : skeletonRows(8, 7); $('#ra-stats', el).innerHTML = ''; $('#ra-note', el).innerHTML = ''; return; }
+    const d = dataMapel(d0), ada = mapelAda(d0);
+    $('#ra-mapel', el).innerHTML = ada.map(m => '<option value="' + esc(m) + '"' + (m === st.mapel ? ' selected' : '') + '>' + esc(mapelName(m)) + '</option>').join('') +
+      (ada.length > 1 ? '<option value=""' + (st.mapel === '' ? ' selected' : '') + '>Semua mata pelajaran (gabungan)</option>' : '') + (ada.length ? '' : '<option value="">Belum ada</option>');
+    $('#ra-mapel', el).disabled = ada.length < 2;
     hasil = rekapAkhir(d, S.boot.peserta.filter(p => p.ID_Kelas === st.kelas));
     const vals = hasil.rows.map(r => r.na).filter(v => v != null), top = hasil.rows.find(r => r.rank === 1);
     const draf = d.sesi.filter(s => s.Status !== 'Selesai').length;
@@ -1244,23 +1290,26 @@ const RekapAkhirPage = (() => {
   }
 
   function ekspor(kind, btn) {
-    const d = data(st.kelas), kl = R().kelas[st.kelas];
+    const d = dataMapel(data(st.kelas)), kl = R().kelas[st.kelas];
     if (!d || !kl) return;
     const res = rekapAkhir(d, S.boot.peserta.filter(p => p.ID_Kelas === st.kelas));
     if (!res.n) return toast('Belum ada nilai', 'Belum ada penilaian harian yang dikirim ke rekap untuk kelas ini.', 'warning');
     const first = res.units[0].s.Tanggal, last = res.units[res.n - 1].s.Tanggal;
-    const info = [['Kelas', kelasName(st.kelas, true)], ['Jumlah hari penilaian', res.n + ' hari'], ['Periode', first === last ? tglPanjang(first) : tglPanjang(first) + ' – ' + tglPanjang(last)]];
+    const gadikSet = Array.from(new Set(res.units.map(u => u.s.ID_Gadik).filter(Boolean)));
+    const info = [['Kelas', kelasName(st.kelas, true)], ['Mata Pelajaran', st.mapel ? mapelName(st.mapel) : 'Semua mata pelajaran'], ['Gadik Pengampu', gadikSet.length ? gadikSet.map(gadikName).join(', ') : '—'],
+      ['Jumlah hari penilaian', res.n + ' hari'], ['Periode', first === last ? tglPanjang(first) : tglPanjang(first) + ' – ' + tglPanjang(last)]];
     const out = {
-      judul: 'REKAPITULASI NILAI AKHIR PESERTA PELATIHAN', instansi: String(CFG.INSTANSI || 'SPN Polda Papua Barat').toUpperCase(), ringkas: kl.Nama_Kelas, info, format: PENILAIAN,
+      judul: 'REKAPITULASI NILAI AKHIR PESERTA PELATIHAN', instansi: String(CFG.INSTANSI || 'SPN Polda Papua Barat').toUpperCase(), ringkas: kl.Nama_Kelas + (st.mapel ? ' • ' + mapelName(st.mapel) : ''), info, format: PENILAIAN,
+      ttd: ttdGadik(gadikSet.length === 1 ? gadikSet[0] : '', last),
       peserta: res.rows.map(r => ({ nama: r.Nama, pn: pangkatNrp(r.p) })),
       hari: res.units.map((u, ui) => ({
         label: u.label, judul: 'PENILAIAN HARIAN PESERTA PELATIHAN',
         info: [['Kelas', kelasName(st.kelas, true)], ['Mata Pelajaran', mapelName(u.s.ID_Mapel) + (u.s.Impor ? ' (hasil impor)' : '')], ['Hari / Tanggal', tglPanjang(u.s.Tanggal, true) + ' (' + u.label + ')'], ['Gadik', u.s.ID_Gadik ? gadikName(u.s.ID_Gadik) : '—']],
-        nilai: res.rows.map(r => r.per[ui].v)
+        nilai: res.rows.map(r => r.per[ui].v), ttd: ttdGadik(u.s.ID_Gadik, u.s.Tanggal)
       })),
       hasil: res.rows.map(r => ({ asp: r.asp, na: r.na, rank: r.rank }))
     };
-    unduhBerkas(kind === 'pdf' ? 'akhirPdf' : 'akhirXlsx', out, namaBerkas(['Rekap-Akhir', kl.Nama_Kelas, kl.Nama_Angkatan], kind === 'pdf' ? 'pdf' : 'xlsx'), btn);
+    unduhBerkas(kind === 'pdf' ? 'akhirPdf' : 'akhirXlsx', out, namaBerkas(['Rekap-Akhir', kl.Nama_Kelas, st.mapel ? mapelName(st.mapel) : 'Semua-Mapel', kl.Nama_Angkatan], kind === 'pdf' ? 'pdf' : 'xlsx'), btn);
   }
 
   return {
@@ -1270,7 +1319,7 @@ const RekapAkhirPage = (() => {
       el = root;
       const k = String(param || '').split('/')[0];
       if (k) {
-        if (k !== st.kelas) { st.pel = ''; st.q = ''; }
+        if (k !== st.kelas) { st.pel = ''; st.q = ''; st.mapel = null; }
         st.kelas = k;
         renderDetail();
         if (R().kelas[k]) load(k, false);
