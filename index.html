@@ -13,13 +13,13 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="css/style.css?v=1.4.1">
-  <script src="js/config.js?v=1.4.1" defer></script>
-  <script src="js/icons.js?v=1.4.1" defer></script>
-  <script src="js/core.js?v=1.4.1" defer></script>
-  <script src="js/ui.js?v=1.4.1" defer></script>
-  <script src="js/pages.js?v=1.4.1" defer></script>
-  <script src="js/app.js?v=1.4.1" defer></script>
+  <link rel="stylesheet" href="css/style.css?v=1.5.0">
+  <script src="js/config.js?v=1.5.0" defer></script>
+  <script src="js/icons.js?v=1.5.0" defer></script>
+  <script src="js/core.js?v=1.5.0" defer></script>
+  <script src="js/ui.js?v=1.5.0" defer></script>
+  <script src="js/pages.js?v=1.5.0" defer></script>
+  <script src="js/app.js?v=1.5.0" defer></script>
 </head>
 <body>
 
@@ -31,37 +31,30 @@
   </div>
 
   <!-- ===================== HALAMAN LOGIN ===================== -->
+  <!-- Satu layar penuh tanpa gulir: gambar utuh di kiri (atas di HP), formulir di kanan (bawah di HP). -->
   <div id="login" class="login" hidden>
-    <div class="login-bar">
-      <div class="emblem" id="login-emblem"></div>
-      <div>
-        <div class="t1">SPN Polda Papua Barat</div>
-        <div class="t2">Sistem Informasi Pelatihan</div>
-      </div>
-      <div class="motto">PRESISI • DISIPLIN • AKUNTABEL</div>
-    </div>
+    <section class="login-art" aria-label="SIPL SPN Polda Papua Barat">
+      <picture>
+        <img id="login-banner" src="img/login-banner.jpg" width="1492" height="1054" alt="SIPL — SPN Polda Papua Barat" fetchpriority="high" decoding="async">
+      </picture>
+    </section>
 
-    <main class="login-main">
+    <main class="login-side">
       <div class="login-card">
-        <div class="login-logo">
-          <div class="inner" id="login-logo"></div>
-          <div class="seal" data-ico="check"></div>
-        </div>
-        <div class="login-head">
-          <div class="kicker">Portal Internal Resmi</div>
-          <h1 id="login-title">SIPL — SPN POLDA PAPUA BARAT</h1>
-          <p>Sistem Informasi Pelatihan</p>
+        <div class="login-brand">
+          <div class="login-logo"><div class="inner" id="login-logo"></div></div>
+          <div class="login-head">
+            <div class="kicker">Portal Internal Resmi</div>
+            <h1 id="login-title">Masuk ke SIPL</h1>
+            <p>Sistem Informasi Pelatihan • SPN Polda Papua Barat</p>
+          </div>
         </div>
 
         <form id="login-form" class="login-form" novalidate autocomplete="on">
-          <div class="alert gold">
-            <span data-ico="lock"></span>
-            <div><b>Sistem internal terbatas</b> — khusus Admin Satdik, Gadik, dan Pengasuh SPN Polda Papua Barat.</div>
-          </div>
           <div id="login-error" class="alert red" role="alert" hidden></div>
 
           <div class="field">
-            <label for="lg-user">Username <span class="req">*</span><span class="tag">ID Personel</span></label>
+            <label for="lg-user">Username</label>
             <div class="input-wrap">
               <span class="lead" data-ico="user"></span>
               <input id="lg-user" name="username" class="input with-lead" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Masukkan username" required>
@@ -69,7 +62,7 @@
           </div>
 
           <div class="field">
-            <label for="lg-pass">Password <span class="req">*</span><span class="tag">Kredensial</span></label>
+            <label for="lg-pass">Password</label>
             <div class="input-wrap">
               <span class="lead" data-ico="lock"></span>
               <input id="lg-pass" name="password" class="input with-lead" type="password" autocomplete="current-password" placeholder="Masukkan password" required>
@@ -77,24 +70,15 @@
             </div>
           </div>
 
-          <div class="login-meta"><span>Lupa password? Hubungi Admin Satdik.</span></div>
-
           <button type="submit" class="btn primary lg block" id="lg-submit">
             <span>Masuk ke Aplikasi</span><span data-ico="arrow-right"></span>
           </button>
-
-          <div class="login-note">
-            <span data-ico="shield"></span>
-            <span>Akun dibuat dan dikelola oleh Admin Satdik. Setelah 5 kali gagal berturut-turut, akun dikunci otomatis selama 15 menit.</span>
-          </div>
+          <div class="login-meta"><span data-ico="shield"></span><span>Khusus Admin Satdik, Gadik &amp; Pengasuh. Lupa password? Hubungi Admin Satdik.</span></div>
           <div id="login-config" class="alert red" hidden></div>
         </form>
       </div>
+      <footer class="login-foot">SPN Polda Papua Barat © <span id="login-year">2026</span> • Presisi • Disiplin • Akuntabel</footer>
     </main>
-    <footer class="login-foot">
-      <b>SPN POLDA PAPUA BARAT</b>
-      Sekolah Polisi Negara • Polda Papua Barat © <span id="login-year">2026</span>
-    </footer>
   </div>
 
   <!-- ===================== APLIKASI (setelah login) ===================== -->

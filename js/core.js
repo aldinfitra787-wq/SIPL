@@ -6,7 +6,7 @@
 
 const CFG = Object.assign({ GAS_URL: '', APP_NAME: 'SIPL — SPN Polda Papua Barat', IDLE_MINUTES: 60, TAHUN_AJARAN: '' }, window.SIPL_CONFIG || {});
 const GAS_URL = String(CFG.GAS_URL || '').trim();
-const FE_VERSION = '1.4.1';              // naikkan bersama ?v= di index.html saat rilis
+const FE_VERSION = '1.5.0';              // naikkan bersama ?v= di index.html saat rilis
 const LS = 'sipl:v1:';
 const TZ = 'Asia/Jayapura';
 const HARI = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];

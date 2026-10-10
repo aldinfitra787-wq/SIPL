@@ -1,8 +1,13 @@
 # Panduan Instalasi SIPL — SPN Polda Papua Barat
 
-**Sistem Informasi Pelatihan** • Versi 1.4.1 (tampilan) • 1.4.0 (server)
+**Sistem Informasi Pelatihan** • Versi 1.5.0 (tampilan) • 1.4.0 (server)
 
 > **Sudah memasang versi sebelumnya (1.0 – 1.3)?** Langsung ke **Bagian G — Memperbarui Versi**. Data Anda tetap aman dan database diperbarui otomatis.
+
+### Yang baru di versi 1.5 — halaman login baru
+- **Halaman login satu layar penuh, tanpa gulir** — di laptop, monitor, tablet, maupun HP (diuji pada 14 ukuran layar, dari 360 × 640 sampai 1920 × 1080).
+- **Gambar spanduk SIPL tampil utuh** di kiri, dengan kolom **Username** dan **Password** di kanannya; gambar tidak tertutup formulir. Di HP tegak, gambar di atas dan formulir di bawah.
+- Gambar dapat diganti: timpa berkas `img/login-banner.jpg` (lihat **Bagian I**).
 
 ### Yang baru di versi 1.4 — jadwal 6 hari & tanda tangan
 - **Satu mata pelajaran = 6 hari (Senin–Sabtu).** Di menu Jadwal, satu mapel cukup dibuat **sekali**: pilih tanggal mulai (Senin), tanggal selesai terisi otomatis (Sabtu), dan keenam hari langsung tercentang. Setiap hari menjadi **HARI 1 … HARI 6** di Rekap Akhir.
@@ -360,6 +365,13 @@ Logo tampil di **halaman login** (lingkaran besar dan pojok kiri atas), **menu s
 - Pakai latar **transparan** (PNG) atau **putih**. Logo ditampilkan di dalam lingkaran pada halaman login, jadi beri sedikit ruang di tepinya.
 - Tidak perlu mengecilkan berkas sendiri: aplikasi memperkecilnya otomatis ke 256 px sebelum disimpan.
 - Logo disimpan langsung di database (sheet `Logo_Aplikasi`), **tidak lewat berbagi Google Drive**, jadi tetap tampil walau domain Google Anda membatasi berbagi tautan publik.
+
+### Mengganti gambar halaman login
+1. Siapkan gambar mendatar (disarankan ± 1500 × 1060 piksel, JPG, < 400 KB).
+2. Simpan dengan nama **`login-banner.jpg`** di folder **`img`** (timpa berkas lama).
+3. `git add .` → `git commit -m "Ganti gambar login"` → `git push`, lalu buka web dan tekan **Ctrl + Shift + R**.
+
+Gambar selalu ditampilkan utuh (tidak dipotong) dan formulir login berada di sampingnya, sehingga gambar tidak tertutup.
 
 ### Cara 2 — logo bawaan dari berkas (opsional)
 Dipakai bila Admin belum mengunggah logo, misalnya agar logo instansi langsung tampil sejak instalasi pertama.

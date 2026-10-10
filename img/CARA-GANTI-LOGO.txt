@@ -1,13 +1,19 @@
-CARA MENGGANTI LOGO WEBSITE SIPL
-================================
+CARA MENGGANTI LOGO & GAMBAR LOGIN SIPL
+=======================================
 
+A. LOGO (ikon bulat di menu, halaman login, dan tab browser)
 Cara 1 (disarankan) — lewat aplikasi, tanpa mengubah berkas:
   Masuk sebagai Admin → menu Pengaturan → kartu "Logo Website" → pilih gambar → Simpan Logo.
-  Logo langsung berganti di semua perangkat (menu samping, halaman login, ikon tab browser).
-
 Cara 2 — logo bawaan dari berkas (tampil bila Admin belum mengunggah logo):
-  1. Simpan logo Anda di folder ini dengan nama  logo.png  (persegi, minimal 256 x 256 px).
+  1. Simpan logo di folder ini dengan nama  logo.png  (persegi, minimal 256 x 256 px).
   2. Buka js/config.js lalu isi:   LOGO: 'img/logo.png',
   3. git add .  →  git commit -m "Ganti logo"  →  git push
+
+B. GAMBAR HALAMAN LOGIN (spanduk besar di kiri / atas)
+  1. Siapkan gambar mendatar (disarankan 1500 x 1060 px, format JPG, ukuran < 400 KB).
+  2. Simpan dengan nama  login-banner.jpg  di folder ini (timpa berkas lama).
+  3. git add .  →  git commit -m "Ganti gambar login"  →  git push
+  4. Buka web lalu tekan Ctrl + Shift + R.
+  Gambar selalu tampil utuh (tidak terpotong) dan tidak tertutup formulir login.
 
 Panduan lengkap: PANDUAN-INSTALASI.md bagian "Mengganti Logo Website".
