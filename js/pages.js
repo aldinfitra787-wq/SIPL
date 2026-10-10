@@ -117,6 +117,90 @@ function saveBadge(state, at, errMsg) {
 // ==========================================================================
 // Status sesi penilaian harian (dipakai Dashboard, Input Nilai, Rekap)
 // ==========================================================================
+// --------------------------------------------------------------------------
+// HAPUS BERANTAI — satu dialog untuk SEMUA tombol Hapus.
+// Server menghitung dulu data yang ikut terhapus (pratinjau), lalu menghapus semuanya setelah dikonfirmasi.
+// --------------------------------------------------------------------------
+const HAPUS_URUTAN = ['Angkatan_Kelas', 'Peleton', 'Mata_Pelajaran', 'Users', 'Data_Gadik', 'Data_Pengasuh', 'Penugasan', 'Peserta_Didik', 'Jadwal', 'Sesi_Nilai', 'Nilai', 'Nilai_Mental'];
+const HAPUS_IKON = { Angkatan_Kelas: 'building', Peleton: 'layers', Mata_Pelajaran: 'book', Users: 'id-card', Data_Gadik: 'user', Data_Pengasuh: 'user', Penugasan: 'link', Peserta_Didik: 'users', Jadwal: 'calendar', Sesi_Nilai: 'clipboard-check', Nilai: 'pen', Nilai_Mental: 'shield-star' };
+
+/**
+ * Tampilkan dialog hapus: pratinjau dampak → konfirmasi → hapus.
+ * o = { judul, nama, utama (sheet data utama, tidak diulang di daftar), extra (data tambahan ke server) }.
+ * Resolve: data hasil hapus, atau null bila dibatalkan.
+ */
+function hapusData(jenis, id, o) {
+  o = o || {};
+  const extra = o.extra || {};
+  return new Promise(resolve => {
+    let done = false;
+    const m = openModal({
+      title: o.judul || 'Hapus data?', icon: 'trash', size: 'narrow', sub: o.nama || '',
+      body: '<div id="hp-body" class="hp-body"><p class="hp-load"><span class="spin"></span>Memeriksa data yang berkaitan…</p></div><div id="hp-alert" class="alert red mt-16" hidden></div>',
+      foot: '<button class="btn outline" data-close>Batal</button><button class="btn danger" id="hp-ok" disabled>' + icon('trash') + 'Hapus Permanen</button>',
+      onClose: () => { if (!done) resolve(null); }
+    });
+    api('hapus', Object.assign({ jenis, id }, extra)).then(res => {
+      if (!m.el.isConnected) return;
+      const body = m.$('#hp-body');
+      if (!res.success) { body.innerHTML = '<div class="alert red">' + icon('alert-circle') + '<div>' + esc(res.message) + '</div></div>'; return; }
+      const d = res.data, L = d.labels || {}, J = d.jumlah || {};
+      const ikut = HAPUS_URUTAN.filter(k => J[k] && k !== o.utama && !(k === 'Data_Gadik' || k === 'Data_Pengasuh') && !(k === 'Users' && jenis === 'akun'));
+      body.innerHTML = '<p class="hp-lead"><b>' + esc(o.nama || d.label) + '</b> akan dihapus permanen' + (ikut.length ? ' <b>beserta semua data yang berkaitan</b>:' : '.') + '</p>' +
+        (ikut.length ? '<ul class="hp-list">' + ikut.map(k => '<li>' + icon(HAPUS_IKON[k] || 'info', 'sm') + '<b>' + fmt.num(J[k]) + '</b><span>' + esc(L[k] || k) + '</span></li>').join('') + '</ul>' : '') +
+        (d.nilai ? '<div class="alert red mt-16">' + icon('alert-triangle') + '<div><b>' + fmt.num(d.nilai) + ' data nilai ikut terhapus.</b> Rekap Harian &amp; Rekap Akhir langsung dihitung ulang tanpa nilai tersebut.</div></div>' +
+          '<label class="check mt-16"><input type="checkbox" id="hp-cek"><span>Saya mengerti — data yang dihapus <b>tidak dapat dikembalikan</b>.</span></label>'
+          : '<p class="small muted mt-16">Tindakan ini tidak dapat dibatalkan.</p>');
+      const ok = m.$('#hp-ok'), cek = m.$('#hp-cek');
+      ok.disabled = !!cek;
+      if (cek) cek.addEventListener('change', () => { ok.disabled = !cek.checked; });
+      else setTimeout(() => ok.focus(), 30);
+      ok.onclick = async () => {
+        const stop = busy(ok, 'Menghapus…');
+        const r2 = await api('hapus', Object.assign({ jenis, id, konfirmasi: true }, extra));
+        stop();
+        if (!r2.success) { const a = m.$('#hp-alert'); a.hidden = false; a.innerHTML = icon('alert-circle') + '<div>' + esc(r2.message) + '</div>'; if (cek) ok.disabled = !cek.checked; return; }
+        done = true;
+        applyHapus(r2.data);
+        m.close();
+        const n = ikut.reduce((s, k) => s + (J[k] || 0), 0);
+        toast('Data dihapus', (o.nama || d.label) + (n ? ' beserta ' + fmt.num(n) + ' data terkait' : ''));
+        resolve(r2.data);
+      };
+    });
+  });
+}
+
+/** Terapkan hasil hapus ke data lokal (tanpa memuat ulang halaman). */
+function applyHapus(d) {
+  const del = d.deleted || {}, set = k => new Set(del[k] || []), b = S.boot;
+  if (!b) return;
+  const K = set('Angkatan_Kelas'), P = set('Peleton'), M = set('Mata_Pelajaran'), PS = set('Peserta_Didik'), J = set('Jadwal'), G = set('Data_Gadik'), SE = set('Sesi_Nilai'), U = set('Users'), PN = set('Penugasan');
+  if (d.ref) Object.assign(b.ref, { kelas: d.ref.kelas, peleton: d.ref.peleton, mapel: d.ref.mapel });
+  else {
+    b.ref.kelas = b.ref.kelas.filter(x => !K.has(x.ID_Kelas));
+    b.ref.peleton = b.ref.peleton.filter(x => !P.has(x.ID_Peleton));
+    b.ref.mapel = b.ref.mapel.filter(x => !M.has(x.ID_Mapel));
+  }
+  b.ref.gadik = (b.ref.gadik || []).filter(x => !G.has(x.ID_Gadik));
+  b.peserta = b.peserta.filter(x => !PS.has(x.ID_Peserta));
+  b.jadwal = b.jadwal.filter(x => !J.has(x.ID_Jadwal));
+  const st = b.stat || {};
+  if (st.sesiHariIni) Object.keys(st.sesiHariIni).forEach(k => { if (J.has(k) || SE.has(st.sesiHariIni[k].ID_Sesi)) delete st.sesiHariIni[k]; });
+  if (st.sesiDraf) { const n0 = st.sesiDraf.length; st.sesiDraf = st.sesiDraf.filter(x => !SE.has(x.ID_Sesi) && !J.has(x.ID_Jadwal)); st.sesiDrafTotal = Math.max(0, (st.sesiDrafTotal || 0) - (n0 - st.sesiDraf.length)); }
+  if (st.kelasTotal != null) { st.kelasTotal = b.ref.kelas.length; st.kelasAktif = b.ref.kelas.filter(k => isAktif(k.Status)).length; }
+  if (st.peserta != null) st.peserta = b.peserta.length;
+  if (d.users && typeof applyUsers === 'function') applyUsers(d.users);
+  else if (S.data.users && S.data.users.users && (U.size || PN.size)) {
+    S.data.users.users = S.data.users.users.filter(u => !U.has(u.ID_User)).map(u => Object.assign(u, { penugasan: (u.penugasan || []).filter(a => !PN.has(a.ID_Penugasan)) }));
+  }
+  if (del.Nilai || del.Sesi_Nilai || del.Nilai_Mental || del.Peserta_Didik || del.Jadwal) {
+    S.data.rekap = {}; S.data.harian = {}; if (S.data.mental) S.data.mental = null;
+    cacheDrop(['rekap:', 'harian:', 'mental']);
+  }
+  bootChanged();
+}
+
 function pesertaCount(idKelas) { return S.boot.peserta.filter(p => p.ID_Kelas === idKelas).length; }
 function sesiBadge(info, total) {
   if (!info) return '<span class="badge empty">Belum diisi</span>';
@@ -321,6 +405,7 @@ const PesertaPage = (() => {
   let el, table;
 
   function canEdit() { return S.role === 'Gadik'; }
+  function canDel() { return S.role === 'Gadik' || S.role === 'Admin'; }
   function myKelas() { return kelasList(); }
 
   function build(root) {
@@ -331,9 +416,9 @@ const PesertaPage = (() => {
         eyebrow: S.role === 'Admin' ? 'Data Peserta Pelatihan // Semua Kelas' : S.role === 'Gadik' ? 'Data Peserta Pelatihan // Isolasi Kelas Binaan' : 'Data Peserta Pelatihan // Peleton Binaan',
         title: 'Peserta Pelatihan',
         desc: S.role === 'Gadik' ? 'Daftar resmi peserta di kelas penugasan Anda. Anda dapat menambah dan memperbarui nama, pangkat, NRP, dan peleton.' :
-          S.role === 'Admin' ? 'Daftar peserta pelatihan seluruh kelas (lihat saja). Data diinput oleh Gadik di masing-masing kelas.' :
+          S.role === 'Admin' ? 'Daftar peserta pelatihan seluruh kelas. Data diinput oleh Gadik di masing-masing kelas; Admin dapat menghapus peserta beserta seluruh nilainya.' :
           'Daftar peserta di kelas/peleton binaan Anda (lihat saja).',
-        chips: S.role === 'Admin' ? '<span class="chip line">' + icon('eye', 'sm') + 'Mode lihat</span>' : '<span class="chip">' + icon('lock', 'sm') + (S.role === 'Gadik' ? 'Kelas penugasan' : 'Peleton binaan') + '</span>',
+        chips: S.role === 'Admin' ? '<span class="chip line">' + icon('eye', 'sm') + 'Lihat &amp; hapus</span>' : '<span class="chip">' + icon('lock', 'sm') + (S.role === 'Gadik' ? 'Kelas penugasan' : 'Peleton binaan') + '</span>',
         actions: canEdit() ? '<button class="btn primary" id="ps-add">' + icon('user-plus') + 'Tambah Peserta</button>' : ''
       }) +
       '<div class="grid c3 keep2" id="ps-stats"></div>' +
@@ -348,7 +433,7 @@ const PesertaPage = (() => {
       empty: () => emptyState('users', 'Belum ada peserta', st.q ? 'Tidak ada peserta yang cocok dengan pencarian.' : 'Belum ada peserta di kelas/peleton ini.', canEdit() && !st.q ? '<button class="btn primary" data-act="add">' + icon('plus') + 'Tambah Peserta</button>' : ''),
       onAction: (act, id) => {
         if (act === 'add') return openForm();
-        if (act === 'edit') return openForm(R().peserta[id]);
+        if (act === 'edit' && canEdit()) return openForm(R().peserta[id]);
         if (act === 'del') return remove(R().peserta[id]);
       }
     });
@@ -368,7 +453,7 @@ const PesertaPage = (() => {
     ];
     if (S.role === 'Admin' || myKelas().length > 1) cols.push({ key: 'kelas', label: 'Kelas', sort: r => kelasName(r.ID_Kelas, true), render: r => esc(kelasName(r.ID_Kelas)) + '<div class="faint small">' + esc((R().kelas[r.ID_Kelas] || {}).Nama_Angkatan || '') + '</div>' });
     cols.push({ key: 'pel', label: 'Peleton', sort: r => pelName(r.ID_Peleton), render: r => r.ID_Peleton ? '<span class="chip line">' + esc(pelName(r.ID_Peleton)) + '</span>' : '<span class="faint">—</span>' });
-    if (canEdit()) cols.push({ key: 'acts', label: 'Aksi', sort: false, cls: 'acts-cell', render: () => '<div class="acts"><button class="btn icon" data-act="edit" title="Ubah">' + icon('edit') + '</button><button class="btn icon red" data-act="del" title="Hapus">' + icon('trash') + '</button></div>' });
+    if (canDel()) cols.push({ key: 'acts', label: 'Aksi', sort: false, cls: 'acts-cell', render: () => '<div class="acts">' + (canEdit() ? '<button class="btn icon" data-act="edit" title="Ubah">' + icon('edit') + '</button>' : '') + '<button class="btn icon red" data-act="del" title="Hapus peserta">' + icon('trash') + '</button></div>' });
     return cols;
   }
 
@@ -454,14 +539,8 @@ const PesertaPage = (() => {
 
   async function remove(p) {
     if (!p) return;
-    const ok = await confirmBox({ title: 'Hapus peserta?', danger: true, okText: 'Hapus', html: 'Data <b>' + esc(p.Nama_Lengkap) + '</b> (NRP ' + esc(p.NRP) + ') akan dihapus. Peserta yang sudah memiliki nilai tidak dapat dihapus.' });
-    if (!ok) return;
-    const res = await api('pesertaDelete', { ID_Peserta: p.ID_Peserta });
-    if (!res.success) return toast('Tidak dapat menghapus', res.message, 'error');
-    S.boot.peserta = S.boot.peserta.filter(x => x.ID_Peserta !== p.ID_Peserta);
-    bootChanged();
-    toast('Peserta dihapus', p.Nama_Lengkap);
-    refresh(true);
+    const r = await hapusData('peserta', p.ID_Peserta, { judul: 'Hapus peserta?', nama: p.Nama_Lengkap + ' (NRP ' + p.NRP + ')', utama: 'Peserta_Didik' });
+    if (r) refresh(true);
   }
 
   return {
@@ -1387,7 +1466,7 @@ function renderSettings(el) {
     pageHead({
       eyebrow: 'Sistem & Keamanan // Pengaturan',
       title: 'Pengaturan',
-      desc: isAdmin ? 'Ganti password akun Anda dan kelola logo aplikasi yang tampil di halaman login serta navigasi.' : 'Ganti password akun Anda secara berkala untuk menjaga keamanan data penilaian.'
+      desc: isAdmin ? 'Ganti password akun Anda dan ganti logo website yang tampil di halaman login, menu samping, dan ikon tab browser.' : 'Ganti password akun Anda secara berkala untuk menjaga keamanan data penilaian.'
     }) +
     '<div class="grid ' + (isAdmin ? 'c2' : 'c2') + '" style="align-items:start">' +
       '<div class="card"><div class="card-head"><div class="icon-tile">' + icon('key') + '</div><div class="grow"><h3>Keamanan Akun & Password</h3><div class="sub">Tersedia untuk semua peran</div></div></div>' +
@@ -1400,14 +1479,16 @@ function renderSettings(el) {
           '<button class="btn primary block" id="pw-save" type="submit">' + icon('key') + 'Perbarui Password</button>' +
         '</form></div>' +
       (isAdmin ?
-        '<div class="card"><div class="card-head"><div class="icon-tile">' + icon('image') + '</div><div class="grow"><h3>Logo Aplikasi</h3><div class="sub">Tampil di halaman login dan navigasi</div></div>' + roleBadge('Admin') + '</div>' +
-          '<div class="card-body"><div class="row" style="align-items:flex-start;gap:20px">' +
-            '<div><div class="label-mono" style="margin-bottom:8px">Logo saat ini</div><div class="logo-preview" id="lg-cur">' + (set.logoUrl ? '<img src="' + esc(set.logoUrl) + '" alt="Logo aplikasi" referrerpolicy="no-referrer">' : icon('shield-star', 'lg') ) + '</div></div>' +
-            '<div class="grow" style="min-width:220px"><div class="label-mono" style="margin-bottom:8px">Unggah pengganti</div>' +
-              '<label class="drop" id="lg-drop"><input type="file" id="lg-file" accept="image/png,image/jpeg" hidden><div class="icon-tile">' + icon('cloud-up') + '</div><b>Pilih berkas atau seret logo ke sini</b><div class="hint mt-8">PNG atau JPG, maksimal 2 MB. Disarankan persegi (1:1).</div></label>' +
+        '<div class="card" id="lg-card"><div class="card-head"><div class="icon-tile">' + icon('image') + '</div><div class="grow"><h3>Logo Website</h3><div class="sub">Tampil di halaman login, menu samping, dan ikon tab browser</div></div>' + roleBadge('Admin') + '</div>' +
+          '<div class="card-body logo-box">' +
+            '<div class="logo-now"><div class="logo-preview" id="lg-cur"></div><div><div class="label-mono" id="lg-cur-t">Logo saat ini</div><div class="logo-place" id="lg-place"></div></div></div>' +
+            '<div><div class="label-mono" style="margin-bottom:8px">Ganti logo</div>' +
+              '<label class="drop" id="lg-drop"><input type="file" id="lg-file" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif" hidden><div class="icon-tile">' + icon('cloud-up') + '</div><b>Pilih berkas atau seret logo ke sini</b><div class="hint mt-8">PNG, JPG, WEBP, atau SVG • maks. 5 MB</div></label>' +
+              '<ul class="logo-spec"><li>Bentuk <b>persegi (1:1)</b>, minimal 256 × 256 piksel.</li><li>Latar <b>transparan atau putih</b> agar rapi di lingkaran halaman login.</li><li>Gambar diperkecil otomatis ke 256 px sebelum disimpan.</li></ul>' +
               '<div id="lg-msg" class="mt-8"></div>' +
-              '<div class="row mt-16"><button class="btn primary" id="lg-save" disabled>' + icon('upload') + 'Simpan Logo</button></div>' +
-            '</div></div></div></div>'
+              '<div class="logo-acts mt-16"><button class="btn primary" id="lg-save" disabled>' + icon('upload') + 'Simpan Logo</button>' +
+              '<button class="btn outline" id="lg-reset"' + (set.logoVer || set.logoUrl ? '' : ' hidden') + '>' + icon('refresh') + 'Kembalikan Logo Bawaan</button></div>' +
+            '</div></div></div>'
         :
         '<div class="card"><div class="card-head"><div class="icon-tile">' + icon('user') + '</div><div class="grow"><h3>Informasi Akun</h3><div class="sub">Diatur oleh Admin Satdik</div></div>' + roleBadge(me.Role) + '</div>' +
           '<div class="card-body"><dl class="kv"><dt>Nama</dt><dd>' + esc(me.Nama_Lengkap) + '</dd><dt>Username</dt><dd class="mono">' + esc(me.Username) + '</dd>' +
@@ -1440,17 +1521,41 @@ function renderSettings(el) {
 
   if (!isAdmin) return;
   let picked = null;
-  const drop = $('#lg-drop', el), file = $('#lg-file', el), msg = $('#lg-msg', el), save = $('#lg-save', el);
-  const pick = f => {
+  const drop = $('#lg-drop', el), file = $('#lg-file', el), msg = $('#lg-msg', el), save = $('#lg-save', el), reset = $('#lg-reset', el);
+  const showLogo = (url, label) => {
+    const img = url ? '<img src="' + esc(url) + '" alt="Logo" referrerpolicy="no-referrer">' : '';
+    $('#lg-cur-t', el).textContent = label;
+    $('#lg-cur', el).innerHTML = img || icon('shield-star', 'lg');
+    $('#lg-place', el).innerHTML = '<div><div class="brand-logo">' + (img || icon('shield-star')) + '</div><small>Menu</small></div>' +
+      '<div><div class="login-mini">' + (img || icon('shield-star')) + '</div><small>Login</small></div>';
+  };
+  showLogo(currentLogo(), 'Logo saat ini');
+  const err = t => { msg.innerHTML = '<div class="alert red">' + icon('alert-circle') + '<div>' + esc(t) + '</div></div>'; };
+  const pick = async f => {
     picked = null; save.disabled = true; msg.innerHTML = '';
     if (!f) return;
-    if (['image/png', 'image/jpeg'].indexOf(f.type) === -1) { msg.innerHTML = '<div class="alert red">' + icon('alert-circle') + '<div>Format tidak didukung. Gunakan PNG atau JPG.</div></div>'; return; }
-    if (f.size > 2 * 1024 * 1024) { msg.innerHTML = '<div class="alert red">' + icon('alert-circle') + '<div>Ukuran ' + fmt.num(f.size / 1048576, 1) + ' MB melebihi batas 2 MB.</div></div>'; return; }
-    picked = f;
-    const url = URL.createObjectURL(f);
-    msg.innerHTML = '<div class="alert green">' + icon('check-circle') + '<div><b>' + esc(f.name) + '</b> • ' + fmt.num(f.size / 1024, 0) + ' KB — siap diunggah.</div></div>';
-    $('#lg-cur', el).innerHTML = '<img src="' + url + '" alt="Pratinjau logo">';
+    if (!/^image\/(png|jpe?g|webp|svg\+xml|gif)$/.test(f.type)) return err('Format tidak didukung. Gunakan PNG, JPG, WEBP, atau SVG.');
+    if (f.size > 5 * 1024 * 1024) return err('Ukuran ' + fmt.num(f.size / 1048576, 1) + ' MB melebihi batas 5 MB.');
+    msg.innerHTML = '<p class="hp-load"><span class="spin"></span>Menyiapkan logo…</p>';
+    try { picked = await kecilkanLogo(f); }
+    catch (e) { return err(e.message || 'Gambar tidak dapat dibaca.'); }
+    picked.name = f.name;
+    showLogo(picked.data, 'Pratinjau logo baru');
+    const kb = Math.round(picked.b64.length * 0.75 / 1024);
+    msg.innerHTML = '<div class="alert ' + (picked.w !== picked.h ? 'gold' : 'green') + '">' + icon(picked.w !== picked.h ? 'info' : 'check-circle') + '<div><b>' + esc(f.name) + '</b> • ' + picked.w + ' × ' + picked.h + ' px • ' + kb + ' KB' +
+      (picked.w !== picked.h ? '<br>Logo tidak persegi — akan tampil dengan ruang kosong di sisi. Hasil terbaik: gambar persegi.' : ' — siap disimpan.') + '</div></div>';
     save.disabled = false;
+  };
+  const selesai = (res, judul, teks) => {
+    S.boot.settings = res.data.settings;
+    Store.set('public', { appName: res.data.settings.appName, logoUrl: res.data.settings.logoUrl, logoVer: res.data.settings.logoVer });
+    if (res.data.logo && res.data.logo.ver) Store.set('logo', res.data.logo); else Store.del('logo');
+    bootChanged();
+    applyBranding();
+    picked = null; save.disabled = true; file.value = '';
+    reset.hidden = !(res.data.settings.logoVer || res.data.settings.logoUrl);
+    showLogo(currentLogo(), 'Logo saat ini');
+    toast(judul, teks);
   };
   file.onchange = () => pick(file.files[0]);
   ['dragover', 'dragenter'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
@@ -1458,15 +1563,45 @@ function renderSettings(el) {
   drop.addEventListener('drop', e => pick(e.dataTransfer.files[0]));
   save.onclick = async () => {
     if (!picked) return;
-    const done = busy(save, 'Mengunggah…');
-    const b64 = await new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = no; r.readAsDataURL(picked); });
-    const res = await api('logoUpload', { mime: picked.type, base64: b64, name: picked.name });
+    const done = busy(save, 'Menyimpan…');
+    const res = await api('logoUpload', { mime: picked.mime, base64: picked.b64, name: picked.name });
     done();
-    if (!res.success) { msg.innerHTML = '<div class="alert red">' + icon('alert-circle') + '<div>' + esc(res.message) + '</div></div>'; return; }
-    S.boot.settings = res.data.settings;
-    Store.set('public', { appName: res.data.settings.appName, logoUrl: res.data.settings.logoUrl });
-    bootChanged();
-    applyBranding();
-    toast('Logo diperbarui', 'Logo baru tampil di navigasi dan halaman login.');
+    if (!res.success) { save.disabled = false; return err(res.message); }
+    msg.innerHTML = '';
+    selesai(res, 'Logo diperbarui', 'Logo baru tampil di menu, halaman login, dan ikon tab di semua perangkat.');
   };
+  reset.onclick = async () => {
+    if (!(await confirmBox({ title: 'Kembalikan logo bawaan?', icon: 'refresh', okText: 'Kembalikan', text: 'Logo yang diunggah dihapus dan website kembali memakai logo bawaan.' }))) return;
+    const done = busy(reset, 'Memproses…');
+    const res = await api('logoUpload', { hapus: true });
+    done();
+    if (!res.success) return err(res.message);
+    msg.innerHTML = '';
+    selesai(res, 'Logo bawaan dipakai kembali', '');
+  };
+}
+
+/** Perkecil logo di browser (maks. 256 px) → PNG; bila masih besar → WEBP/JPG. */
+async function kecilkanLogo(f) {
+  const url = URL.createObjectURL(f);
+  try {
+    const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error('Gambar tidak dapat dibaca. Coba simpan ulang sebagai PNG.')); i.src = url; });
+    const nw = img.naturalWidth || 256, nh = img.naturalHeight || 256, sc = Math.min(1, 256 / Math.max(nw, nh));
+    const w = Math.max(1, Math.round(nw * sc)), h = Math.max(1, Math.round(nh * sc));
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(img, 0, 0, w, h);
+    const LIMIT = 150 * 1024;
+    let best = null;
+    for (const [type, q] of [['image/png'], ['image/webp', 0.92], ['image/webp', 0.8], ['image/jpeg', 0.88]]) {
+      let cv = c;
+      if (type === 'image/jpeg') { cv = document.createElement('canvas'); cv.width = w; cv.height = h; const g2 = cv.getContext('2d'); g2.fillStyle = '#fff'; g2.fillRect(0, 0, w, h); g2.drawImage(c, 0, 0); }
+      const d = cv.toDataURL(type, q);
+      if (d.indexOf('data:' + type) !== 0) continue;
+      const b64 = d.slice(d.indexOf(',') + 1);
+      if (!best || b64.length < best.b64.length) best = { mime: type, data: d, b64, w, h };
+      if (b64.length * 0.75 <= LIMIT) { best = { mime: type, data: d, b64, w, h }; break; }
+    }
+    if (!best || best.b64.length * 0.75 > 190 * 1024) throw new Error('Logo terlalu rumit untuk diperkecil. Gunakan gambar yang lebih sederhana.');
+    return best;
+  } finally { URL.revokeObjectURL(url); }
 }

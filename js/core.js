@@ -6,7 +6,7 @@
 
 const CFG = Object.assign({ GAS_URL: '', APP_NAME: 'SIPL — SPN Polda Papua Barat', IDLE_MINUTES: 60, TAHUN_AJARAN: '' }, window.SIPL_CONFIG || {});
 const GAS_URL = String(CFG.GAS_URL || '').trim();
-const FE_VERSION = '1.2.0';              // naikkan bersama ?v= di index.html saat rilis
+const FE_VERSION = '1.3.0';              // naikkan bersama ?v= di index.html saat rilis
 const LS = 'sipl:v1:';
 const TZ = 'Asia/Jayapura';
 const HARI = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
@@ -166,6 +166,13 @@ async function swr(key, action, payload, render, opt) {
     opt.onError(res);
   }
   return res;
+}
+/** Buang cache lokal pengguna yang kuncinya diawali salah satu prefiks (mis. setelah data dihapus). */
+function cacheDrop(prefixes) {
+  try {
+    const base = LS + uk('');
+    Object.keys(localStorage).filter(x => x.indexOf(base) === 0 && prefixes.some(p => x.indexOf(base + p) === 0)).forEach(x => localStorage.removeItem(x));
+  } catch (e) { /* abaikan */ }
 }
 function cachePut(key, data) { Store.set(uk(key), { t: Date.now(), h: hashStr(JSON.stringify(data)), data }); }
 function cacheGet(key) { const c = Store.get(uk(key), null); return c ? c.data : null; }

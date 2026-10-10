@@ -254,7 +254,7 @@ class Table {
     o.columns.forEach(c => {
       const sortable = c.sort !== false && c.key;
       const sorted = this.sort && this.sort.key === c.key;
-      h += '<th class="' + (c.num ? 'num ' : '') + (sortable ? 'sortable ' : '') + (sorted ? 'sorted ' : '') + (c.thCls || '') + '"' +
+      h += '<th class="' + (c.num ? 'num ' : '') + (sortable ? 'sortable ' : '') + (sorted ? 'sorted ' : '') + (c.thCls || (c.key === 'acts' ? 'acts-cell' : '')) + '"' +
         (sortable ? ' data-sort="' + esc(c.key) + '"' : '') + (c.width ? ' style="width:' + c.width + '"' : '') + '>' + (c.labelHtml || esc(c.label || '')) +
         (sortable ? '<span class="sort">' + (sorted ? (this.sort.dir === 'desc' ? '▼' : '▲') : '↕') + '</span>' : '') + '</th>';
     });

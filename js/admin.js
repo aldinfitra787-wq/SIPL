@@ -27,7 +27,7 @@ function loadUsers(after, force) {
 // PERSONEL & AKUN (US-05)
 // ==========================================================================
 const PersonelPage = (() => {
-  const st = { tab: 'all', q: '', kelas: '', status: '' };
+  const st = { tab: 'all', q: '', kelas: '' };
   let el, table, err = null;
 
   function build(root) {
@@ -36,7 +36,7 @@ const PersonelPage = (() => {
       pageHead({
         eyebrow: 'Personel & Penugasan // Administrator Satdik',
         title: 'Personel & Akun Login',
-        desc: 'Kelola akun login Gadik dan Pengasuh, reset password, status akun, serta penugasan kelas dan peleton.',
+        desc: 'Kelola akun login Gadik dan Pengasuh, reset password, serta penugasan kelas dan peleton. Menghapus akun Gadik ikut menghapus jadwal mengajar beserta nilai harian mata pelajarannya.',
         actions: '<button class="btn outline" id="pr-refresh">' + icon('refresh') + 'Segarkan</button><a class="btn primary" href="#/akun/baru">' + icon('user-plus') + 'Tambah Akun</a>'
       }) +
       '<div class="grid c4 keep2" id="pr-stats"></div>' +
@@ -44,20 +44,18 @@ const PersonelPage = (() => {
       '<div class="card"><div class="toolbar">' +
         '<div class="field search"><label for="pr-q">Cari personel</label><div class="input-wrap">' + icon('search', 'lead') + '<input id="pr-q" class="input with-lead" placeholder="Nama, NRP, atau username…" autocomplete="off"></div></div>' +
         '<div class="field"><label for="pr-kelas">Penugasan kelas</label><select id="pr-kelas" class="select"></select></div>' +
-        '<div class="field narrow"><label for="pr-status">Status akun</label><select id="pr-status" class="select"><option value="">Semua</option><option>Aktif</option><option>Nonaktif</option></select></div>' +
       '</div><div id="pr-table"></div></div>';
     table = new Table($('#pr-table', el), {
       key: 'ID_User', unit: 'akun', pageSize: 25, sort: { key: 'Nama_Lengkap', dir: 'asc' },
       columns: [
-        { key: 'Nama_Lengkap', label: 'Nama Lengkap', cls: 'card-title', render: u => '<div class="t-person"><div class="avatar sm' + (u.Status_Aktif !== 'Aktif' ? ' red' : '') + '">' + esc(initials(u.Nama_Lengkap)) + '</div><div class="t-name"><b>' + esc(u.Nama_Lengkap) + '</b><small class="mono">@' + esc(u.Username) + '</small></div></div>' },
+        { key: 'Nama_Lengkap', label: 'Nama Lengkap', cls: 'card-title', render: u => '<div class="t-person"><div class="avatar sm' + (u.Status_Aktif !== 'Aktif' ? ' red' : '') + '">' + esc(initials(u.Nama_Lengkap)) + '</div><div class="t-name"><b>' + esc(u.Nama_Lengkap) + (u.Status_Aktif !== 'Aktif' ? ' <span class="badge off">Nonaktif</span>' : '') + '</b><small class="mono">@' + esc(u.Username) + '</small></div></div>' },
         { key: 'NRP', label: 'Pangkat / NRP', render: u => esc(u.Pangkat || '—') + '<div><span class="nrp">' + esc(u.NRP || '—') + '</span></div>' },
         { key: 'Role', label: 'Peran', render: u => roleBadge(u.Role) },
         { key: 'asg', label: 'Penugasan', sort: u => u.penugasan.length ? kelasName(u.penugasan[0].ID_Kelas) : '', render: u => asgText(u.penugasan) },
-        { key: 'Status_Aktif', label: 'Status', render: u => statusBadge(u.Status_Aktif) },
         { key: 'acts', label: 'Aksi', sort: false, cls: 'acts-cell', render: u => '<div class="acts">' +
+          (u.Status_Aktif !== 'Aktif' ? '<button class="btn outline xs" data-act="aktifkan" title="Akun ini dinonaktifkan di versi lama">' + icon('power', 'sm') + 'Aktifkan</button>' : '') +
           '<button class="btn icon" data-act="edit" title="Ubah akun">' + icon('edit') + '</button>' +
           '<button class="btn icon" data-act="pw" title="Reset password">' + icon('key') + '</button>' +
-          '<button class="btn icon' + (u.Status_Aktif === 'Aktif' ? ' red' : '') + '" data-act="toggle" title="' + (u.Status_Aktif === 'Aktif' ? 'Nonaktifkan' : 'Aktifkan') + '">' + icon('power') + '</button>' +
           '<button class="btn icon red" data-act="del" title="Hapus akun">' + icon('trash') + '</button></div>' }
       ],
       empty: () => emptyState('id-card', 'Belum ada akun', st.q ? 'Tidak ada personel yang cocok.' : 'Tambahkan akun Gadik atau Pengasuh pertama.', st.q ? '' : '<a class="btn primary" href="#/akun/baru">' + icon('user-plus') + 'Tambah Akun</a>'),
@@ -66,13 +64,12 @@ const PersonelPage = (() => {
         if (!u) return;
         if (act === 'edit') go('akun/' + encodeURIComponent(id));
         if (act === 'pw') resetPassword(u);
-        if (act === 'toggle') toggle(u);
+        if (act === 'aktifkan') aktifkan(u);
         if (act === 'del') remove(u);
       }
     });
     $('#pr-q', el).addEventListener('input', debounce(e => { st.q = e.target.value; render(); }, 250));
     $('#pr-kelas', el).onchange = e => { st.kelas = e.target.value; render(); };
-    $('#pr-status', el).onchange = e => { st.status = e.target.value; render(); };
     $('#pr-tabs', el).addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) { st.tab = b.dataset.tab; render(); } });
     $('#pr-refresh', el).onclick = () => load(true);
     $('#pr-table', el).addEventListener('click', e => { if (e.target.closest('[data-retry]')) load(true); });
@@ -83,15 +80,15 @@ const PersonelPage = (() => {
     const n = r => all.filter(u => u.Role === r).length;
     $('#pr-stats', el).innerHTML =
       stat({ label: 'Total Akun', value: all.length, unit: 'akun', icon: 'users', cap: 'Gadik & Pengasuh terdaftar' }) +
-      stat({ label: 'Gadik', value: n('Gadik'), unit: 'personel', icon: 'book', cap: all.filter(u => u.Role === 'Gadik' && u.Status_Aktif === 'Aktif').length + ' aktif' }) +
-      stat({ label: 'Pengasuh', value: n('Pengasuh'), unit: 'personel', icon: 'shield', cap: all.filter(u => u.Role === 'Pengasuh' && u.Status_Aktif === 'Aktif').length + ' aktif' }) +
-      stat({ label: 'Nonaktif / Belum Ditugaskan', value: all.filter(u => u.Status_Aktif !== 'Aktif').length, unit: 'nonaktif', icon: 'alert-triangle', tone: 'red', cap: all.filter(u => !u.penugasan.length).length + ' akun belum punya penugasan' });
+      stat({ label: 'Gadik', value: n('Gadik'), unit: 'personel', icon: 'book', cap: 'Pengajar mata pelajaran' }) +
+      stat({ label: 'Pengasuh', value: n('Pengasuh'), unit: 'personel', icon: 'shield', cap: 'Pembina peleton' }) +
+      stat({ label: 'Belum Ditugaskan', value: all.filter(u => !u.penugasan.length).length, unit: 'akun', icon: 'alert-triangle', tone: all.some(u => !u.penugasan.length) ? 'red' : '', cap: 'Belum punya penugasan kelas/peleton' });
     $('#pr-tabs', el).innerHTML = [['all', 'Semua Akun', all.length], ['Gadik', 'Gadik', n('Gadik')], ['Pengasuh', 'Pengasuh', n('Pengasuh')]]
       .map(t => '<button role="tab" data-tab="' + t[0] + '" class="' + (st.tab === t[0] ? 'on' : '') + '">' + t[1] + '<span class="count">' + t[2] + '</span></button>').join('');
     $('#pr-kelas', el).innerHTML = options(kelasList(), 'ID_Kelas', k => k.Nama_Kelas + ' — ' + k.Nama_Angkatan, st.kelas, 'Semua kelas');
     if (!usersData()) { $('#pr-table', el).innerHTML = err ? errorState(err.message) : skeletonRows(6, 5); return; }
     table.set(all.filter(u =>
-      (st.tab === 'all' || u.Role === st.tab) && (!st.status || u.Status_Aktif === st.status) &&
+      (st.tab === 'all' || u.Role === st.tab) &&
       (!st.kelas || u.penugasan.some(a => a.ID_Kelas === st.kelas)) &&
       (!q || norm(u.Nama_Lengkap + ' ' + u.NRP + ' ' + u.Username).indexOf(q) > -1)), keep);
   }
@@ -127,26 +124,18 @@ const PersonelPage = (() => {
     };
   }
 
-  async function toggle(u) {
-    const aktif = u.Status_Aktif === 'Aktif';
-    if (aktif && !(await confirmBox({ title: 'Nonaktifkan akun?', danger: true, okText: 'Nonaktifkan', html: '<b>' + esc(u.Nama_Lengkap) + '</b> tidak akan bisa masuk sampai diaktifkan kembali. Sesi yang sedang berjalan akan langsung berakhir.' }))) return;
-    const prev = u.Status_Aktif;
-    u.Status_Aktif = aktif ? 'Nonaktif' : 'Aktif';
-    render(true);                                                // optimistic
-    const res = await api('userStatus', { ID_User: u.ID_User, Status_Aktif: u.Status_Aktif });
-    if (!res.success) { u.Status_Aktif = prev; render(true); return toast('Gagal mengubah status', res.message, 'error'); }
+  /** Akun yang dinonaktifkan di versi lama: aktifkan kembali (fitur nonaktifkan sudah dihapus). */
+  async function aktifkan(u) {
+    const res = await api('userStatus', { ID_User: u.ID_User, Status_Aktif: 'Aktif' });
+    if (!res.success) return toast('Gagal mengaktifkan', res.message, 'error');
     applyUsers(res.data);
     render(true);
-    toast(aktif ? 'Akun dinonaktifkan' : 'Akun diaktifkan', u.Nama_Lengkap);
+    toast('Akun diaktifkan', u.Nama_Lengkap + ' dapat masuk kembali.');
   }
 
   async function remove(u) {
-    if (!(await confirmBox({ title: 'Hapus akun?', danger: true, okText: 'Hapus permanen', html: 'Akun <b>' + esc(u.Nama_Lengkap) + '</b> (@' + esc(u.Username) + ') beserta data personel dan penugasannya akan dihapus. Nilai yang pernah diinput tetap tersimpan. Tindakan ini tidak dapat dibatalkan.<br><br>Ingin sekadar memblokir akses? Gunakan <b>Nonaktifkan</b>.' }))) return;
-    const res = await api('userDelete', { ID_User: u.ID_User });
-    if (!res.success) return toast('Tidak dapat menghapus', res.message, 'error');
-    applyUsers(res.data);
-    render(true);
-    toast('Akun dihapus', u.Nama_Lengkap);
+    const r = await hapusData('akun', u.ID_User, { judul: 'Hapus akun ' + u.Role + '?', nama: u.Nama_Lengkap + ' (@' + u.Username + ')' });
+    if (r) render(true);
   }
 
   return {
@@ -304,7 +293,7 @@ page('akun', AkunForm);
 // MASTER DATA (US-06) — Kelas, Peleton, Mapel, Penugasan
 // ==========================================================================
 const MasterPage = (() => {
-  const st = { tab: 'kelas', q: '', status: '', kelas: '' };
+  const st = { tab: 'kelas', q: '', kelas: '' };
   let el, table;
   const TABS = [['kelas', 'Angkatan & Kelas', 'building'], ['peleton', 'Peleton', 'layers'], ['mapel', 'Mata Pelajaran', 'book'], ['penugasan', 'Penugasan', 'link']];
 
@@ -314,7 +303,7 @@ const MasterPage = (() => {
       pageHead({
         eyebrow: 'Master Data // Kurikulum Pelatihan & Organisasi',
         title: 'Master Data',
-        desc: 'Konfigurasi angkatan/kelas pelatihan, peleton, mata pelajaran, dan penugasan personel. Data yang sudah dipakai nilai hanya dapat dinonaktifkan.',
+        desc: 'Konfigurasi angkatan/kelas pelatihan, peleton, mata pelajaran, dan penugasan personel. Menghapus data akan langsung menghapus semua data yang berkaitan (peserta, jadwal, dan nilai) setelah Anda konfirmasi.',
         actions: '<button class="btn primary" id="ms-add">' + icon('plus') + '<span id="ms-add-t">Tambah</span></button>'
       }) +
       '<div class="tabs" id="ms-tabs" role="tablist"></div>' +
@@ -336,47 +325,43 @@ const MasterPage = (() => {
     const tools = $('#ms-tools', el);
     tools.innerHTML =
       '<div class="field search"><label for="ms-q">Cari</label><div class="input-wrap">' + icon('search', 'lead') + '<input id="ms-q" class="input with-lead" placeholder="Cari data master…" value="' + esc(st.q) + '" autocomplete="off"></div></div>' +
-      (st.tab === 'peleton' || st.tab === 'penugasan' ? '<div class="field"><label>Kelas</label><select class="select" id="ms-kelas">' + options(kelasList(), 'ID_Kelas', k => k.Nama_Kelas + ' — ' + k.Nama_Angkatan, st.kelas, 'Semua kelas') + '</select></div>' : '') +
-      (st.tab !== 'penugasan' ? '<div class="field narrow"><label>Status</label><select class="select" id="ms-status"><option value="">Semua</option>' + ['Aktif', 'Nonaktif'].map(s => '<option' + (st.status === s ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></div>' : '');
+      (st.tab === 'peleton' || st.tab === 'penugasan' ? '<div class="field"><label>Kelas</label><select class="select" id="ms-kelas">' + options(kelasList(), 'ID_Kelas', k => k.Nama_Kelas + ' — ' + k.Nama_Angkatan, st.kelas, 'Semua kelas') + '</select></div>' : '');
     const q = $('#ms-q', tools);
     q.addEventListener('input', debounce(e => { st.q = e.target.value; fill(); }, 250));
     const k = $('#ms-kelas', tools); if (k) k.onchange = e => { st.kelas = e.target.value; fill(); };
-    const s = $('#ms-status', tools); if (s) s.onchange = e => { st.status = e.target.value; fill(); };
     makeTable();
     fill(keep);
   }
 
-  function actBtns(row, statusKey) {
-    const on = isAktif(row[statusKey || 'Status']);
-    return '<div class="acts"><button class="btn icon" data-act="edit" title="Ubah">' + icon('edit') + '</button>' +
-      '<button class="btn icon' + (on ? ' red' : '') + '" data-act="toggle" title="' + (on ? 'Nonaktifkan' : 'Aktifkan') + '">' + icon('power') + '</button>' +
+  /** Tombol aksi: Ubah + Hapus. "Aktifkan" hanya muncul untuk data yang dinonaktifkan di versi lama. */
+  function actBtns(row) {
+    return '<div class="acts">' + (isAktif(row.Status) ? '' : '<button class="btn outline xs" data-act="aktifkan" title="Data ini dinonaktifkan di versi lama">' + icon('power', 'sm') + 'Aktifkan</button>') +
+      '<button class="btn icon" data-act="edit" title="Ubah">' + icon('edit') + '</button>' +
       '<button class="btn icon red" data-act="del" title="Hapus">' + icon('trash') + '</button></div>';
   }
+  const offBadge = r => isAktif(r.Status) ? '' : ' <span class="badge off">Nonaktif</span>';
 
   function makeTable() {
     const P = S.boot.peserta, cols = {
       kelas: [
         { key: 'ID_Kelas', label: 'ID', render: r => '<span class="mono small">' + esc(r.ID_Kelas) + '</span>' },
-        { key: 'Nama_Kelas', label: 'Kelas', cls: 'card-title', sort: r => r.Nama_Angkatan + ' ' + r.Nama_Kelas, render: r => '<div class="t-name"><b>' + esc(r.Nama_Kelas) + '</b><small>' + esc(r.Nama_Angkatan) + '</small></div>' },
+        { key: 'Nama_Kelas', label: 'Kelas', cls: 'card-title', sort: r => r.Nama_Angkatan + ' ' + r.Nama_Kelas, render: r => '<div class="t-name"><b>' + esc(r.Nama_Kelas) + offBadge(r) + '</b><small>' + esc(r.Nama_Angkatan) + '</small></div>' },
         { key: 'nPel', label: 'Peleton', num: true, sort: r => pelOf(r.ID_Kelas).length, render: r => pelOf(r.ID_Kelas).length },
         { key: 'nPst', label: 'Peserta', num: true, sort: r => P.filter(p => p.ID_Kelas === r.ID_Kelas).length, render: r => P.filter(p => p.ID_Kelas === r.ID_Kelas).length },
-        { key: 'Status', label: 'Status', render: r => statusBadge(r.Status) },
         { key: 'acts', label: 'Aksi', sort: false, cls: 'acts-cell', render: r => actBtns(r) }
       ],
       peleton: [
         { key: 'ID_Peleton', label: 'ID', render: r => '<span class="mono small">' + esc(r.ID_Peleton) + '</span>' },
-        { key: 'Nama_Peleton', label: 'Peleton', cls: 'card-title', render: r => '<b>' + esc(r.Nama_Peleton) + '</b>' },
+        { key: 'Nama_Peleton', label: 'Peleton', cls: 'card-title', render: r => '<b>' + esc(r.Nama_Peleton) + offBadge(r) + '</b>' },
         { key: 'kelas', label: 'Kelas', sort: r => kelasName(r.ID_Kelas, true), render: r => esc(kelasName(r.ID_Kelas)) + '<div class="faint small">' + esc((R().kelas[r.ID_Kelas] || {}).Nama_Angkatan || '') + '</div>' },
         { key: 'nPst', label: 'Peserta', num: true, sort: r => P.filter(p => p.ID_Peleton === r.ID_Peleton).length, render: r => P.filter(p => p.ID_Peleton === r.ID_Peleton).length },
-        { key: 'Status', label: 'Status', render: r => statusBadge(r.Status) },
         { key: 'acts', label: 'Aksi', sort: false, cls: 'acts-cell', render: r => actBtns(r) }
       ],
       mapel: [
         { key: 'ID_Mapel', label: 'ID', render: r => '<span class="mono small">' + esc(r.ID_Mapel) + '</span>' },
-        { key: 'Nama_Mapel', label: 'Mata Pelajaran', cls: 'card-title', render: r => '<b>' + esc(r.Nama_Mapel) + '</b>' },
+        { key: 'Nama_Mapel', label: 'Mata Pelajaran', cls: 'card-title', render: r => '<b>' + esc(r.Nama_Mapel) + offBadge(r) + '</b>' },
         { key: 'Bobot_JP', label: 'Bobot / JP', num: true, sort: r => r.Bobot_JP === '' ? '' : Number(r.Bobot_JP), render: r => r.Bobot_JP === '' ? '<span class="faint">—</span>' : esc(r.Bobot_JP) },
         { key: 'nJdw', label: 'Sesi Jadwal', num: true, sort: r => S.boot.jadwal.filter(j => j.ID_Mapel === r.ID_Mapel).length, render: r => S.boot.jadwal.filter(j => j.ID_Mapel === r.ID_Mapel).length },
-        { key: 'Status', label: 'Status', render: r => statusBadge(r.Status) },
         { key: 'acts', label: 'Aksi', sort: false, cls: 'acts-cell', render: r => actBtns(r) }
       ],
       penugasan: [
@@ -384,7 +369,6 @@ const MasterPage = (() => {
         { key: 'Role', label: 'Peran', render: r => roleBadge(r.Role) },
         { key: 'kelas', label: 'Kelas', sort: r => kelasName(r.ID_Kelas, true), render: r => esc(kelasName(r.ID_Kelas, true)) },
         { key: 'pel', label: 'Peleton', sort: r => pelName(r.ID_Peleton), render: r => r.Role === 'Gadik' ? '<span class="faint">Seluruh kelas</span>' : (r.ID_Peleton ? esc(pelName(r.ID_Peleton)) : '<span class="faint">Semua peleton</span>') },
-        { key: 'Status_Aktif', label: 'Status Akun', render: r => statusBadge(r.Status_Aktif) },
         { key: 'acts', label: 'Aksi', sort: false, cls: 'acts-cell', render: () => '<div class="acts"><button class="btn icon red" data-act="del" title="Hapus penugasan">' + icon('trash') + '</button></div>' }
       ]
     };
@@ -403,9 +387,9 @@ const MasterPage = (() => {
   function fill(keep) {
     const q = norm(st.q), b = S.boot;
     let rows;
-    if (st.tab === 'kelas') rows = b.ref.kelas.filter(k => (!st.status || (isAktif(k.Status) ? 'Aktif' : 'Nonaktif') === st.status) && (!q || norm(k.Nama_Angkatan + ' ' + k.Nama_Kelas + ' ' + k.ID_Kelas).indexOf(q) > -1));
-    else if (st.tab === 'peleton') rows = b.ref.peleton.filter(p => (!st.kelas || p.ID_Kelas === st.kelas) && (!st.status || (isAktif(p.Status) ? 'Aktif' : 'Nonaktif') === st.status) && (!q || norm(p.Nama_Peleton + ' ' + kelasName(p.ID_Kelas, true)).indexOf(q) > -1));
-    else if (st.tab === 'mapel') rows = b.ref.mapel.filter(m => (!st.status || (isAktif(m.Status) ? 'Aktif' : 'Nonaktif') === st.status) && (!q || norm(m.Nama_Mapel + ' ' + m.ID_Mapel).indexOf(q) > -1));
+    if (st.tab === 'kelas') rows = b.ref.kelas.filter(k => (!q || norm(k.Nama_Angkatan + ' ' + k.Nama_Kelas + ' ' + k.ID_Kelas).indexOf(q) > -1));
+    else if (st.tab === 'peleton') rows = b.ref.peleton.filter(p => (!st.kelas || p.ID_Kelas === st.kelas) && (!q || norm(p.Nama_Peleton + ' ' + kelasName(p.ID_Kelas, true)).indexOf(q) > -1));
+    else if (st.tab === 'mapel') rows = b.ref.mapel.filter(m => (!q || norm(m.Nama_Mapel + ' ' + m.ID_Mapel).indexOf(q) > -1));
     else {
       if (!usersData()) { $('#ms-table', el).innerHTML = skeletonRows(5, 4); loadUsers(e => { if (e) $('#ms-table', el).innerHTML = errorState(e.message); else render(true); }); return; }
       rows = [];
@@ -416,9 +400,9 @@ const MasterPage = (() => {
   }
 
   const DEF = {
-    kelas: { list: () => S.boot.ref.kelas, id: 'ID_Kelas', save: 'kelasSave', del: 'kelasDelete', label: r => r.Nama_Kelas + ' — ' + r.Nama_Angkatan, name: 'kelas' },
-    peleton: { list: () => S.boot.ref.peleton, id: 'ID_Peleton', save: 'peletonSave', del: 'peletonDelete', label: r => r.Nama_Peleton + ' (' + kelasName(r.ID_Kelas) + ')', name: 'peleton' },
-    mapel: { list: () => S.boot.ref.mapel, id: 'ID_Mapel', save: 'mapelSave', del: 'mapelDelete', label: r => r.Nama_Mapel, name: 'mata pelajaran' }
+    kelas: { list: () => S.boot.ref.kelas, id: 'ID_Kelas', save: 'kelasSave', jenis: 'kelas', utama: 'Angkatan_Kelas', label: r => r.Nama_Kelas + ' — ' + r.Nama_Angkatan, name: 'kelas' },
+    peleton: { list: () => S.boot.ref.peleton, id: 'ID_Peleton', save: 'peletonSave', jenis: 'peleton', utama: 'Peleton', label: r => r.Nama_Peleton + ' (' + kelasName(r.ID_Kelas) + ')', name: 'peleton' },
+    mapel: { list: () => S.boot.ref.mapel, id: 'ID_Mapel', save: 'mapelSave', jenis: 'mapel', utama: 'Mata_Pelajaran', label: r => r.Nama_Mapel, name: 'mata pelajaran' }
   };
 
   function applyRef(res) {
@@ -431,39 +415,26 @@ const MasterPage = (() => {
   async function action(act, id) {
     if (st.tab === 'penugasan') {
       if (act !== 'del') return;
-      const ok = await confirmBox({ title: 'Hapus penugasan?', danger: true, okText: 'Hapus', text: 'Personel tidak lagi dapat mengakses data kelas/peleton ini.' });
-      if (!ok) return;
-      const res = await api('penugasanDelete', { ID_Penugasan: id });
-      if (!res.success) return toast('Gagal', res.message, 'error');
-      applyUsers(res.data); render(true); toast('Penugasan dihapus', '');
+      const u = staffList().find(x => x.penugasan.some(a => a.ID_Penugasan === id)), a = u && u.penugasan.find(x => x.ID_Penugasan === id);
+      const r = await hapusData('penugasan', id, { judul: 'Hapus penugasan?', nama: u ? u.Nama_Lengkap + ' → ' + kelasName(a.ID_Kelas) + (a.ID_Peleton ? ' / ' + pelName(a.ID_Peleton) : '') : id, utama: 'Penugasan' });
+      if (r) render(true);
       return;
     }
     const D = DEF[st.tab], row = D.list().find(r => r[D.id] === id);
     if (!row) return;
     if (act === 'edit') return openForm(st.tab, row);
-    if (act === 'toggle') {
-      const next = isAktif(row.Status) ? 'Nonaktif' : 'Aktif';
-      const res = await api(D.save, Object.assign({}, row, { Status: next }));
+    if (act === 'aktifkan') {
+      const res = await api(D.save, Object.assign({}, row, { Status: 'Aktif' }));
       if (!res.success) return toast('Gagal', res.message, 'error');
-      applyRef(res); toast(next === 'Aktif' ? 'Diaktifkan' : 'Dinonaktifkan', D.label(row));
+      applyRef(res); toast('Diaktifkan', D.label(row));
       return;
     }
     if (act === 'del') {
-      const ok = await confirmBox({ title: 'Hapus ' + D.name + '?', danger: true, okText: 'Hapus', html: '<b>' + esc(D.label(row)) + '</b> akan dihapus permanen. Data yang sudah dipakai nilai tidak dapat dihapus, hanya dinonaktifkan.' });
-      if (!ok) return;
-      const payload = {}; payload[D.id] = id;
-      const res = await api(D.del, payload);
-      if (res.success) { applyRef(res); toast('Data dihapus', D.label(row)); return; }
-      if (res.code === 'IN_USE' && isAktif(row.Status)) {
-        const off = await confirmBox({ title: 'Tidak dapat dihapus', icon: 'lock', okText: 'Nonaktifkan saja', text: res.message + ' Nonaktifkan sekarang?' });
-        if (off) { const r2 = await api(D.save, Object.assign({}, row, { Status: 'Nonaktif' })); if (r2.success) { applyRef(r2); toast('Dinonaktifkan', D.label(row)); } else toast('Gagal', r2.message, 'error'); }
-        return;
-      }
-      toast('Tidak dapat menghapus', res.message, 'error');
+      const r = await hapusData(D.jenis, id, { judul: 'Hapus ' + D.name + '?', nama: D.label(row), utama: D.utama });
+      if (r) render(true);
     }
   }
 
-  function statusField(v) { return '<div class="field"><label>Status</label><select name="Status" class="select"><option' + (isAktif(v) ? ' selected' : '') + '>Aktif</option><option' + (!isAktif(v) ? ' selected' : '') + '>Nonaktif</option></select></div>'; }
 
   function openForm(tab, row) {
     const isEdit = !!row;
@@ -472,20 +443,20 @@ const MasterPage = (() => {
     if (tab === 'kelas') {
       title = isEdit ? 'Ubah Angkatan & Kelas' : 'Tambah Angkatan & Kelas'; ic = 'building';
       body = '<div class="field span-all"><label>Angkatan / gelombang pelatihan <span class="req">*</span></label><input name="Nama_Angkatan" class="input" maxlength="80" placeholder="Contoh: Pelatihan Gelombang I 2026" value="' + esc(row ? row.Nama_Angkatan : '') + '"></div>' +
-        '<div class="field"><label>Nama kelas <span class="req">*</span></label><input name="Nama_Kelas" class="input" maxlength="60" placeholder="Contoh: Kelas A" value="' + esc(row ? row.Nama_Kelas : '') + '"></div>' + statusField(row ? row.Status : 'Aktif');
+        '<div class="field span-all"><label>Nama kelas <span class="req">*</span></label><input name="Nama_Kelas" class="input" maxlength="60" placeholder="Contoh: Kelas A" value="' + esc(row ? row.Nama_Kelas : '') + '"></div>';
     } else if (tab === 'peleton') {
       title = isEdit ? 'Ubah Peleton' : 'Tambah Peleton'; ic = 'layers';
       body = '<div class="field span-all"><label>Kelas <span class="req">*</span></label><select name="ID_Kelas" class="select">' + options(kelasList(), 'ID_Kelas', k => k.Nama_Kelas + ' — ' + k.Nama_Angkatan, row ? row.ID_Kelas : st.kelas, 'Pilih kelas') + '</select></div>' +
-        '<div class="field"><label>Nama peleton <span class="req">*</span></label><input name="Nama_Peleton" class="input" maxlength="60" placeholder="Contoh: Peleton 1" value="' + esc(row ? row.Nama_Peleton : '') + '"></div>' + statusField(row ? row.Status : 'Aktif');
+        '<div class="field span-all"><label>Nama peleton <span class="req">*</span></label><input name="Nama_Peleton" class="input" maxlength="60" placeholder="Contoh: Peleton 1" value="' + esc(row ? row.Nama_Peleton : '') + '"></div>';
     } else {
       title = isEdit ? 'Ubah Mata Pelajaran' : 'Tambah Mata Pelajaran'; ic = 'book';
       body = '<div class="field span-all"><label>Nama mata pelajaran <span class="req">*</span></label><input name="Nama_Mapel" class="input" maxlength="100" placeholder="Contoh: Hukum Kepolisian" value="' + esc(row ? row.Nama_Mapel : '') + '"></div>' +
-        '<div class="field"><label>Bobot / JP<span class="tag">Opsional</span></label><input name="Bobot_JP" class="input mono" inputmode="numeric" maxlength="5" value="' + esc(row ? row.Bobot_JP : '') + '"></div>' + statusField(row ? row.Status : 'Aktif');
+        '<div class="field"><label>Bobot / JP<span class="tag">Opsional</span></label><input name="Bobot_JP" class="input mono" inputmode="numeric" maxlength="5" value="' + esc(row ? row.Bobot_JP : '') + '"></div>';
     }
     const m = openModal({
       title, icon: ic, sub: isEdit ? 'ID ' + row[DEF[tab].id] : 'Data master baru',
       body: '<form id="mf" class="form-grid" novalidate><div id="mf-alert" class="alert red span-all" hidden></div>' + body +
-        '<div class="alert gold span-all">' + icon('info') + '<div>Data yang sudah memiliki relasi nilai atau peserta tidak dapat dihapus, hanya dapat dinonaktifkan.</div></div></form>',
+        '</form>',
       foot: '<button class="btn outline" data-close>Batal</button><button class="btn primary" id="mf-save">' + icon('save') + 'Simpan Data Master</button>'
     });
     const form = m.$('#mf');
@@ -719,12 +690,8 @@ window.JadwalAdmin = (() => {
 
   async function remove(j) {
     if (!j) return;
-    const ok = await confirmBox({ title: 'Hapus sesi jadwal?', danger: true, okText: 'Hapus', html: '<b>' + esc(mapelName(j.ID_Mapel)) + '</b> — ' + esc(kelasName(j.ID_Kelas)) + ', ' + esc(j.Hari) + ' ' + esc(fmt.jam(j.Jam_Mulai)) + '–' + esc(fmt.jam(j.Jam_Selesai)) + ' akan dihapus.' });
-    if (!ok) return;
-    const res = await api('jadwalDelete', { ID_Jadwal: j.ID_Jadwal });
-    if (!res.success) return toast('Gagal menghapus', res.message, 'error');
-    S.boot.jadwal = res.data.jadwal; bootChanged(); render();
-    toast('Sesi dihapus', mapelName(j.ID_Mapel));
+    const r = await hapusData('jadwal', j.ID_Jadwal, { judul: 'Hapus sesi jadwal?', nama: mapelName(j.ID_Mapel) + ' — ' + kelasName(j.ID_Kelas) + ', ' + j.Hari + ' ' + fmt.jam(j.Jam_Mulai) + '–' + fmt.jam(j.Jam_Selesai), utama: 'Jadwal' });
+    if (r) render();
   }
 
   return {
@@ -772,6 +739,7 @@ const RekapPage = (() => {
       if (e.target.closest('[data-back]')) { st.sesi = ''; return fill(); }
       const u = e.target.closest('[data-unduh]'); if (u) return ekspor(u.dataset.unduh, u);
       const b = e.target.closest('[data-buka]'); if (b) return unlock(b.dataset.buka);
+      const h = e.target.closest('[data-hapus-sesi]'); if (h) return hapusSesi(h.dataset.hapusSesi);
     });
     main.addEventListener('change', e => { if (e.target.id === 'rk-sesi-st') { st.fStatus = e.target.value; fill(); } });
     fill();
@@ -810,7 +778,7 @@ const RekapPage = (() => {
   function sesiList(main, d, labelOf) {
     const total = pesertaCount(st.kelas);
     main.innerHTML = '<div class="toolbar" style="border-bottom:1px solid var(--border)"><div class="field narrow"><label for="rk-sesi-st">Status</label><select class="select" id="rk-sesi-st"><option value="">Semua</option><option value="Selesai"' + (st.fStatus === 'Selesai' ? ' selected' : '') + '>Masuk rekap</option><option value="Draf"' + (st.fStatus === 'Draf' ? ' selected' : '') + '>Draf</option></select></div>' +
-      '<p class="small muted grow" style="align-self:center;margin:0">Klik sesi yang sudah masuk rekap untuk melihat lembar penilaiannya (bisa diunduh PDF/Excel). <b>Buka kunci</b> bila Gadik perlu mengoreksi; nilai sesi itu keluar dari rekap sampai dikirim ulang.</p></div><div id="rk-list"></div>';
+      '<p class="small muted grow" style="align-self:center;margin:0">Klik sesi yang sudah masuk rekap untuk melihat lembar penilaiannya (bisa diunduh PDF/Excel). <b>Buka kunci</b> bila Gadik perlu mengoreksi; <b>Hapus</b> menghapus sesi beserta semua nilainya.</p></div><div id="rk-list"></div>';
     const list = d.sesi.filter(s => !st.fStatus || (st.fStatus === 'Selesai' ? s.Status === 'Selesai' : s.Status !== 'Selesai')).slice().reverse();
     new Table($('#rk-list', main), {
       key: 'ID_Sesi', unit: 'sesi', pageSize: 25, sort: { key: 'Tanggal', dir: 'desc' },
@@ -820,14 +788,13 @@ const RekapPage = (() => {
         { key: 'mapel', label: 'Mata Pelajaran', cls: 'card-title', sort: s => mapelName(s.ID_Mapel), render: s => '<div class="t-name"><b>' + esc(mapelName(s.ID_Mapel)) + '</b><small>' + (s.Impor ? 'Hasil impor' : esc(fmt.jam(s.Jam || '')) + (s.Jam ? ' WIT' : '')) + '</small></div>' },
         { key: 'gadik', label: 'Gadik', sort: s => gadikName(s.ID_Gadik), render: s => s.ID_Gadik ? esc(gadikName(s.ID_Gadik)) : '<span class="faint">—</span>' },
         { key: 'Jumlah', label: 'Dinilai', num: true, render: s => '<span class="mono">' + (s.Jumlah || 0) + '/' + total + '</span>' },
-        { key: 'Status', label: 'Status', render: s => s.Status === 'Selesai' ? '<span class="badge ok">Masuk rekap</span>' : '<span class="badge draft">Draf</span>' },
-        { key: 'Waktu_Selesai', label: 'Dikirim', render: s => s.Status === 'Selesai' && s.Waktu_Selesai ? '<span class="small">' + esc(fmt.dateTime(s.Waktu_Selesai)) + '</span>' + (s.Diselesaikan_Oleh ? '<div class="small muted">' + esc(s.Diselesaikan_Oleh) + '</div>' : '') : '<span class="faint">—</span>' },
-        { key: 'Catatan_Admin', label: 'Catatan Admin', cls: 'wide', render: s => s.Catatan_Admin ? '<span class="small">' + esc(s.Catatan_Admin) + '</span>' : '<span class="faint">—</span>' },
-        { key: 'acts', label: 'Aksi', sort: false, cls: 'acts-cell', render: s => s.Status === 'Selesai'
-          ? '<div class="acts"><button class="btn outline xs" data-act="lihat">' + icon('eye', 'sm') + 'Lembar</button>' + (s.Impor ? '' : '<button class="btn outline xs" data-buka="' + esc(s.ID_Sesi) + '">' + icon('unlock', 'sm') + 'Buka kunci</button>') + '</div>'
-          : '<span class="small muted">Menunggu Gadik</span>' }
+        { key: 'Status', label: 'Status', render: s => (s.Status === 'Selesai' ? '<span class="badge ok">Masuk rekap</span>' : '<span class="badge draft">Draf</span>') + (s.Catatan_Admin ? '<div class="small muted mt-8" title="Catatan Admin">' + icon('unlock', 'sm') + ' ' + esc(s.Catatan_Admin) + '</div>' : '') },
+        { key: 'Waktu_Selesai', label: 'Dikirim', render: s => s.Status === 'Selesai' && s.Waktu_Selesai ? '<span class="small nowrap">' + esc(fmt.dateTime(s.Waktu_Selesai)) + '</span>' + (s.Diselesaikan_Oleh ? '<div class="small muted">' + esc(s.Diselesaikan_Oleh) + '</div>' : '') : '<span class="faint">—</span>' },
+        { key: 'acts', label: 'Aksi', sort: false, cls: 'acts-cell', render: s => '<div class="acts">' + (s.Status === 'Selesai'
+          ? '<button class="btn outline xs" data-act="lihat">' + icon('eye', 'sm') + 'Lembar</button>' + (s.Impor ? '' : '<button class="btn icon" data-buka="' + esc(s.ID_Sesi) + '" title="Buka kunci (Gadik dapat mengoreksi)" aria-label="Buka kunci">' + icon('unlock') + '</button>')
+          : '') + '<button class="btn icon red" data-act="del" title="Hapus sesi beserta nilainya">' + icon('trash') + '</button></div>' }
       ],
-      onAction: (act, id) => { if (act === 'lihat') { st.sesi = id; fill(); } },
+      onAction: (act, id) => { if (act === 'lihat') { st.sesi = id; fill(); } if (act === 'del') hapusSesi(id); },
       onRow: id => { const s = d.sesi.find(x => x.ID_Sesi === id); if (s && s.Status === 'Selesai') { st.sesi = id; fill(); } },
       empty: () => emptyState('clipboard-check', st.fStatus ? 'Tidak ada sesi dengan status ini' : 'Belum ada sesi penilaian', 'Sesi muncul setelah Gadik mulai menginput nilai harian di kelas ini.')
     }).set(list);
@@ -838,7 +805,8 @@ const RekapPage = (() => {
     main.innerHTML = '<div class="card-head"><button type="button" class="btn icon" data-back aria-label="Kembali ke daftar sesi" title="Kembali">' + icon('arrow-left') + '</button>' +
       '<div class="grow"><h3>' + esc((label ? label + ' — ' : '') + mapelName(s.ID_Mapel)) + '</h3><div class="sub">' + esc(tglPanjang(s.Tanggal, true)) + (s.Jam ? ' • ' + esc(fmt.jam(s.Jam)) + ' WIT' : '') + (s.ID_Gadik ? ' • ' + esc(gadikName(s.ID_Gadik)) : '') +
         (s.Waktu_Selesai ? ' • dikirim ' + esc(fmt.dateTime(s.Waktu_Selesai)) : '') + '</div></div>' + tombolUnduh() +
-      (s.Impor ? '' : '<button type="button" class="btn outline sm" data-buka="' + esc(s.ID_Sesi) + '">' + icon('unlock', 'sm') + 'Buka kunci</button>') + '</div>' +
+      (s.Impor ? '' : '<button type="button" class="btn outline sm" data-buka="' + esc(s.ID_Sesi) + '">' + icon('unlock', 'sm') + 'Buka kunci</button>') +
+      '<button type="button" class="btn danger-line sm" data-hapus-sesi="' + esc(s.ID_Sesi) + '">' + icon('trash', 'sm') + 'Hapus</button></div>' +
       lembarLegend() + '<div class="sheet-wrap">' + (rows.length ? lembarTabel(rows, {}) : emptyState('search', 'Tidak ada peserta', 'Tidak ada peserta yang cocok dengan filter.')) + '</div>';
   }
 
@@ -856,8 +824,15 @@ const RekapPage = (() => {
         { key: 'mental', label: 'Skor Mental', num: true, render: r => r.mental === '' ? '<span class="badge empty">Belum dinilai</span>' : '<b>' + fmt.num(r.mental, 2) + '</b>' },
         { key: 'catatan', label: 'Catatan Pembinaan', cls: 'wide', render: r => r.catatan ? esc(r.catatan) : '<span class="faint">—</span>' },
         { key: 'mBy', label: 'Diinput oleh', render: r => r.mBy ? esc(d.names[r.mBy] || r.mBy) : '<span class="faint">—</span>' },
-        { key: 'mAt', label: 'Waktu', render: r => r.mAt ? '<span class="small">' + esc(fmt.dateTime(r.mAt)) + '</span>' : '<span class="faint">—</span>' }
+        { key: 'mAt', label: 'Waktu', render: r => r.mAt ? '<span class="small">' + esc(fmt.dateTime(r.mAt)) + '</span>' : '<span class="faint">—</span>' },
+        { key: 'acts', label: 'Aksi', sort: false, cls: 'acts-cell', render: r => r.mental === '' && !r.catatan ? '<span class="faint">—</span>' : '<div class="acts"><button class="btn icon red" data-act="del" title="Hapus nilai mental">' + icon('trash') + '</button></div>' }
       ],
+      onAction: async (act, id) => {
+        if (act !== 'del') return;
+        const p = R().peserta[id];
+        const r = await hapusData('mental', id, { judul: 'Hapus nilai mental?', nama: 'Nilai mental ' + (p ? p.Nama_Lengkap : id), utama: 'Nilai_Mental' });
+        if (r) load(true);
+      },
       empty: () => emptyState('search', 'Tidak ada peserta', '')
     }).set(rows);
   }
@@ -875,6 +850,18 @@ const RekapPage = (() => {
       peserta: all.map(p => ({ nama: p.Nama_Lengkap, pn: pangkatNrp(p) })), nilai: all.map(p => v[p.ID_Peserta] || KOSONG())
     };
     unduhBerkas(kind === 'pdf' ? 'hariPdf' : 'hariXlsx', out, namaBerkas(['Penilaian-Harian', kelasName(st.kelas), label, mapelName(s.ID_Mapel), s.Tanggal], kind === 'pdf' ? 'pdf' : 'xlsx'), btn);
+  }
+
+  /** Hapus satu sesi penilaian harian beserta seluruh nilainya. */
+  async function hapusSesi(id) {
+    const d = data(), s = d && d.sesi.find(x => x.ID_Sesi === id);
+    if (!s) return;
+    const label = (hariPenilaian(d.sesi).find(u => u.s.ID_Sesi === id) || {}).label;
+    const r = await hapusData('sesi', id, { judul: 'Hapus sesi penilaian?', nama: (label ? label + ' — ' : '') + mapelName(s.ID_Mapel) + ', ' + fmt.tgl(s.Tanggal, { hari: true }), utama: 'Sesi_Nilai', extra: { idKelas: st.kelas } });
+    if (!r) return;
+    st.sesi = '';
+    fill();
+    load(true);
   }
 
   /** Admin membuka kunci sesi agar Gadik dapat mengoreksi nilai. */

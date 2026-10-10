@@ -26,16 +26,39 @@ let lastAct = Date.now(), ending = false, hiddenAt = 0;
 // --------------------------------------------------------------------------
 // Branding (logo & nama dari server, disimpan lokal untuk tampil instan)
 // --------------------------------------------------------------------------
+// Urutan logo: (1) logo yang diunggah Admin di Pengaturan — disimpan di database & di-cache per versi,
+// (2) CFG.LOGO di js/config.js (berkas di repo, mis. img/logo.png), (3) ikon perisai bawaan.
+const _logoTried = {};
+function brandInfo() { return (S.boot && S.boot.settings) || Store.get('public', {}) || {}; }
 function currentLogo() {
-  const s = (S.boot && S.boot.settings) || Store.get('public', {}) || {};
-  return s.logoUrl || '';
+  const s = brandInfo(), c = Store.get('logo', null);
+  if (s.logoVer) {
+    if (c && c.ver === s.logoVer && c.data) return c.data;
+    fetchLogo(s.logoVer);
+    if (c && c.data) return c.data;                       // tampilkan logo sebelumnya sambil memuat yang baru
+  } else if (c && s.appName) Store.del('logo');           // logo sudah dikembalikan ke bawaan
+  if (s.logoUrl) return s.logoUrl;                        // logo lama via Google Drive (v1.0–1.2)
+  return CFG.LOGO || '';
 }
+function fetchLogo(ver) {
+  if (_logoTried[ver] || !isConfigured()) return;
+  _logoTried[ver] = 1;
+  fetch(GAS_URL + '?action=logo&v=' + encodeURIComponent(ver), { cache: 'no-store' })
+    .then(r => r.json())
+    .then(j => { if (j && j.success && j.data.data) { Store.set('logo', j.data); applyBranding(); } })
+    .catch(() => {});
+}
+let _favDefault = null;
 function applyBranding() {
   const url = currentLogo();
   const img = alt => '<img src="' + esc(url) + '" alt="' + alt + '" referrerpolicy="no-referrer" onerror="this.replaceWith(document.createRange().createContextualFragment(icon(\'shield-star\')))">';
   const brand = $('#brand-logo'), login = $('#login-logo');
   if (brand) brand.innerHTML = url ? img('Logo SIPL') : icon('shield-star');
   if (login) login.innerHTML = url ? img('Logo SPN Polda Papua Barat') : icon('shield-star');
+  const emb = $('#login-emblem');
+  if (emb) emb.innerHTML = url ? img('Logo') : icon('shield-star');
+  const fav = document.querySelector('link[rel="icon"]');
+  if (fav) { if (_favDefault === null) _favDefault = fav.href; fav.href = url || _favDefault; }
 }
 
 // --------------------------------------------------------------------------
@@ -56,7 +79,7 @@ function showLogin(msg) {
   setTimeout(() => { const u = $('#lg-user'); if (u && !u.value) u.focus(); }, 50);
   fetchPublicInfo().then(info => {
     if (!info) return;
-    Store.set('public', { appName: info.appName, logoUrl: info.logoUrl });
+    Store.set('public', { appName: info.appName, logoUrl: info.logoUrl, logoVer: info.logoVer || '' });
     applyBranding();
     if (info.setup === false) {
       const c = $('#login-config');
@@ -135,7 +158,7 @@ function startApp(boot) {
   bootChanged();
   $('#boot').hidden = true; $('#login').hidden = true; $('#shell').hidden = false;
   buildNav(); fillUser(); applyBranding();
-  Store.set('public', { appName: boot.settings.appName, logoUrl: boot.settings.logoUrl });
+  Store.set('public', { appName: boot.settings.appName, logoUrl: boot.settings.logoUrl, logoVer: boot.settings.logoVer || '' });
   const begin = () => {
     if (!location.hash || location.hash === '#/' || location.hash === '#') history.replaceState(null, '', '#/dashboard');
     route();

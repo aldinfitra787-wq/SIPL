@@ -14,6 +14,10 @@ window.SIPL_CONFIG = {
   INSTANSI: 'SPN Polda Papua Barat',
   TAHUN_AJARAN: '2026',
 
+  // Logo bawaan (opsional). Taruh berkas logo di folder img/ lalu isi, contoh: 'img/logo.png'.
+  // Logo yang diunggah Admin di menu Pengaturan selalu diutamakan. Kosongkan '' = ikon perisai.
+  LOGO: '',
+
   // Sesi berakhir otomatis bila tidak ada aktivitas (menit). Server juga menegakkan 60 menit.
   IDLE_MINUTES: 60
 };
