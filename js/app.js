@@ -5,12 +5,12 @@
 const NAV = {
   Admin: [
     ['Navigasi Utama', [['dashboard', 'grid', 'Dashboard'], ['peserta', 'cap', 'Peserta Pelatihan'], ['personel', 'id-card', 'Personel & Akun', 'ADMIN'], ['master', 'database', 'Master Data', 'ADMIN'], ['jadwal', 'calendar', 'Jadwal Pelajaran']]],
-    ['Penilaian', [['rekap', 'table', 'Rekap Nilai']]],
+    ['Penilaian', [['rekap', 'table', 'Rekap Harian'], ['rekap-akhir', 'medal', 'Rekap Akhir']]],
     ['Sistem', [['migrasi', 'import', 'Migrasi Data'], ['pengaturan', 'settings', 'Pengaturan']]]
   ],
   Gadik: [
     ['Navigasi Utama', [['dashboard', 'grid', 'Dashboard'], ['peserta', 'cap', 'Peserta Pelatihan'], ['jadwal', 'calendar', 'Jadwal Pelajaran']]],
-    ['Penilaian', [['nilai', 'pen', 'Input Nilai Harian']]],
+    ['Penilaian', [['nilai', 'pen', 'Input Nilai Harian'], ['rekap-akhir', 'medal', 'Rekap Akhir']]],
     ['Akun', [['pengaturan', 'settings', 'Pengaturan']]]
   ],
   Pengasuh: [

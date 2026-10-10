@@ -124,7 +124,7 @@ function showServerError(root, res, alertSel) {
   else toast('Gagal', res.message || 'Terjadi kesalahan.', 'error');
 }
 function busy(btn, text) {
-  if (!btn) return () => {};
+  if (!btn || !btn.style) return () => {};
   const html = btn.innerHTML, w = btn.offsetWidth;
   btn.disabled = true;
   btn.style.minWidth = w + 'px';

@@ -200,7 +200,7 @@ function dashAdmin(el) {
     '<div class="grid c4">' +
       shortcut('personel', 'id-card', 'Personel & Akun', 'Kelola akun login Gadik dan Pengasuh, reset password, dan penugasan kelas/peleton.') +
       shortcut('jadwal', 'calendar', 'Jadwal Pelajaran', 'Matriks jadwal mingguan per kelas dengan deteksi bentrok Gadik dan kelas otomatis.') +
-      shortcut('rekap', 'table', 'Rekap Nilai', 'Rata-rata nilai harian per mapel, rincian per tanggal, status sesi, dan nilai mental.') +
+      shortcut('rekap-akhir', 'medal', 'Rekap Akhir', 'NIL AKHIR & peringkat per kelas sesuai format PROLAT, siap diunduh PDF/Excel.') +
       shortcut('master', 'database', 'Master Data', 'Angkatan & kelas pelatihan, peleton, mata pelajaran, dan penugasan personel.') +
     '</div>';
 }
@@ -268,9 +268,10 @@ function dashGadik(el) {
         return sessionCard(j, i, true, sesiBadge(s, pesertaCount(j.ID_Kelas)) + '<a class="btn ' + (done ? 'outline' : 'primary') + ' sm" href="' + nilaiHref(tgl, j.ID_Jadwal) + '">' + (done ? icon('eye', 'sm') + 'Lihat nilai' : icon('pen', 'sm') + 'Input nilai') + '</a>');
       }).join('') + '</div>' : emptyState('calendar', 'Tidak ada sesi mengajar hari ini', 'Jadwal mengajar Anda kosong untuk hari ' + now.hari + '.')) + '</div></div>' +
     '<div class="section-title"><h2>Menu Pintas</h2><span class="label-mono">Aksi cepat</span></div>' +
-    '<div class="grid c3">' +
+    '<div class="grid c4">' +
+      shortcut('nilai', 'pen', 'Input Nilai Harian', 'Pilih tanggal dan sesi, isi skor A1–C2 (0–10), lalu kirim ke rekap. Draf tersimpan otomatis.', 'Mulai input') +
+      shortcut('rekap-akhir', 'medal', 'Rekap Akhir', 'NIL AKHIR & peringkat kelas Anda, bisa diunduh PDF/Excel.', 'Lihat rekap') +
       shortcut('peserta', 'users', 'Data Peserta Pelatihan', 'Tambah dan perbarui nama, pangkat, NRP, dan peleton peserta di kelas Anda.', 'Buka daftar') +
-      shortcut('nilai', 'pen', 'Input Nilai Harian', 'Pilih tanggal dan sesi, isi nilai, lalu kirim ke rekap. Draf tersimpan otomatis.', 'Mulai input') +
       shortcut('jadwal', 'calendar', 'Jadwal Kelas', 'Lihat jadwal pelajaran mingguan kelas Anda beserta pengajar dan ruangan.', 'Lihat jadwal') +
     '</div>';
 }
@@ -524,10 +525,47 @@ page('jadwal', {
 // Alur: pilih tanggal → pilih sesi yang diajar (radio-card) → isi nilai seluruh
 // peserta (draf tersimpan otomatis) → "Selesai & Kirim ke Rekap" (nilai dikunci).
 // ==========================================================================
+/**
+ * Lembar penilaian harian (format PROLAT): NO · NAMA · PANGKAT/NRP · A1 A2 A3 JUMLAH · B1 B2 JUMLAH · C1 C2 JUMLAH.
+ * rows: [{ p: peserta, no, v: [7 butir] }]; opt.edit → kotak isian; opt.status(pid) → kolom status.
+ */
+function lembarTabel(rows, opt) {
+  opt = opt || {};
+  const A = PENILAIAN.ASPEK;
+  let h1 = '<tr><th rowspan="2" class="no">NO</th><th rowspan="2" class="nm">NAMA</th><th rowspan="2" class="pn">PANGKAT / NRP</th>', h2 = '<tr>';
+  A.forEach(g => {
+    h1 += '<th colspan="' + g.butir.length + '" class="grp g0">' + esc(g.nama.toUpperCase()) + '</th><th rowspan="2" class="jml">JUMLAH</th>';
+    g.butir.forEach((b, k) => { h2 += '<th class="bt' + (k === 0 ? ' g0' : '') + '">' + b + '</th>'; });
+  });
+  if (opt.status) h1 += '<th rowspan="2" class="st">STATUS</th>';
+  const body = rows.map(r => {
+    const pid = r.p.ID_Peserta, v = r.v || KOSONG(), sums = jumlahAspek(v), any = terisi(v) > 0, dirty = !!(opt.dirty && opt.dirty(pid));
+    let h = '<tr data-pid="' + esc(pid) + '"><td class="no">' + pad2(r.no) + '</td><td class="nm"><b>' + esc(r.p.Nama_Lengkap) + '</b><small>' + esc(pelName(r.p.ID_Peleton)) + '</small></td><td class="pn">' + (r.p.Pangkat ? '<span class="pk">' + esc(r.p.Pangkat) + '</span>' : '') + '<span class="nr">' + esc(r.p.NRP || '') + '</span></td>';
+    let i = 0;
+    A.forEach((g, gi) => {
+      g.butir.forEach((b, k) => {
+        const x = v[i];
+        h += '<td class="bt' + (k === 0 ? ' g0' : '') + '" data-label="' + b + '">' + (opt.edit
+          ? '<input class="skor' + (dirty ? ' dirty' : '') + '" inputmode="decimal" autocomplete="off" maxlength="5" data-pid="' + esc(pid) + '" data-i="' + i + '" value="' + esc(fmtSkor(x)) + '" aria-label="' + esc(b + ' — ' + r.p.Nama_Lengkap) + '">'
+          : '<span class="skv">' + (x === '' || x == null ? '<span class="miss">—</span>' : esc(fmtSkor(x))) + '</span>') + '</td>';
+        i++;
+      });
+      h += '<td class="jml" data-label="Σ ' + esc(g.nama.replace('Aspek ', '')) + '"><b data-j="' + esc(pid + '|' + gi) + '">' + (any ? fmtSkor(sums[gi]) : '<span class="miss">—</span>') + '</b></td>';
+    });
+    if (opt.status) h += '<td class="st"><span data-st="' + esc(pid) + '">' + opt.status(pid) + '</span></td>';
+    return h + '</tr>';
+  }).join('');
+  return '<table class="sheet' + (opt.edit ? ' edit' : '') + '"><thead>' + h1 + '</tr>' + h2 + '</tr></thead><tbody>' + body + '</tbody></table>';
+}
+function lembarLegend() {
+  return '<div class="sheet-legend">' + icon('info', 'sm') + '<span>Skor tiap butir <b>0–' + PENILAIAN.SKOR_MAX + '</b>. <b>JUMLAH</b> terhitung otomatis (butir kosong = 0).</span>' +
+    PENILAIAN.ASPEK.map(g => '<span class="chip line">' + esc(g.nama) + ' ' + g.butir.join('·') + ' • ' + Math.round(g.bobot * 100) + '%</span>').join('') + '</div>';
+}
+
 const NilaiPage = (() => {
   const st = { tgl: '', jid: '', pel: '', status: '', q: '' };
-  const savers = {};
-  let el, table = null, saver = null, loadErr = null, workFor = '';
+  const savers = {}, bad = {};
+  let el, table = null, saver = null, loadErr = null, workFor = '', shown = [];
 
   const key = (t, j) => 'draft:nilai:' + t + ':' + j;
   const J = id => S.boot.jadwal.find(j => j.ID_Jadwal === id);
@@ -551,7 +589,7 @@ const NilaiPage = (() => {
       pageHead({
         eyebrow: 'Penilaian Harian // Tenaga Pendidik',
         title: 'Input Nilai Harian',
-        desc: 'Pilih <b>tanggal</b> dan <b>sesi</b> yang Anda ajar, isi nilai 0–100 seluruh peserta, lalu tekan <b>Selesai &amp; Kirim ke Rekap</b>. Nilai tersimpan otomatis sebagai draf saat Anda mengetik — tekan <span class="kbd">Enter</span> untuk pindah ke peserta berikutnya.',
+        desc: 'Pilih <b>tanggal</b> dan <b>sesi</b> yang Anda ajar, isi skor <b>A1–C2 (0–10)</b> seluruh peserta sesuai format penilaian PROLAT, lalu tekan <b>Selesai &amp; Kirim ke Rekap</b>. Nilai tersimpan otomatis sebagai draf — <span class="kbd">Enter</span> pindah ke butir berikutnya, <span class="kbd">↑</span><span class="kbd">↓</span> pindah peserta.',
         chips: '<span class="chip ink">' + icon('lock', 'sm') + 'Hanya sesi yang Anda ajar</span>'
       }) +
       '<div class="card"><div class="card-head">' +
@@ -574,6 +612,7 @@ const NilaiPage = (() => {
       const g = e.target.closest('[data-goto]'); if (g) return selectDate(g.dataset.goto);
       if (e.target.closest('[data-retry]')) load(true);
     });
+    $('#nh-work', el).addEventListener('click', e => { const b = e.target.closest('[data-unduh]'); if (b) ekspor(b.dataset.unduh, b); });
     $('#nh-draf', el).addEventListener('click', e => {
       const b = e.target.closest('[data-open-sesi]');
       if (b) { const [t, j] = b.dataset.openSesi.split('/'); selectDate(t, j); scrollToWork(); }
@@ -605,7 +644,7 @@ const NilaiPage = (() => {
     scrollToWork();
   }
   function afterSelect() {
-    if (workFor !== st.tgl + '|' + st.jid) { st.pel = ''; st.status = ''; st.q = ''; }
+    if (workFor !== st.tgl + '|' + st.jid) { st.pel = ''; st.status = ''; st.q = ''; Object.keys(bad).forEach(k => { delete bad[k]; }); }
     syncHash(); useSaver(); renderSesi(); renderDraf(); ensureWork();
   }
   function flushCurrent() { if (saver && saver.count()) saver.flush(); }
@@ -631,13 +670,13 @@ const NilaiPage = (() => {
     const here = () => st.tgl === tgl && st.jid === jid;
     return new AutoSaver({
       key: key(tgl, jid), delay: 1500,
-      send: batch => api('nilaiSave', { tanggal: tgl, idJadwal: jid, items: Object.keys(batch).map(id => ({ id, nilai: batch[id] })) }),
+      send: batch => api('nilaiSave', { tanggal: tgl, idJadwal: jid, items: Object.keys(batch).map(id => ({ id, v: batch[id] })) }),
       onState: id => { if (here() && el) updateRow(id); },
       onSaved: res => {
         const d = (S.data.harian || {})[tgl];
         if (d) {
           const m = d.nilai[jid] = d.nilai[jid] || {};
-          res.data.saved.forEach(s => { if (s.nilai === '') delete m[s.id]; else m[s.id] = [s.nilai, s.waktu, S.me.Nama_Lengkap]; });
+          res.data.saved.forEach(s => { if (s.nilai === '') delete m[s.id]; else m[s.id] = [s.v, s.waktu, S.me.Nama_Lengkap]; });
           if (res.data.sesi) d.sesi[jid] = Object.assign({}, d.sesi[jid] || {}, res.data.sesi);
           cachePut('harian:' + tgl, d);
         }
@@ -647,6 +686,7 @@ const NilaiPage = (() => {
         if (here()) { renderHead(); updateProgress(); }
       },
       onFail: res => {
+        if (res.code === 'OUTDATED') { toast('Muat ulang aplikasi', res.message, 'warning'); return; }
         if (res.code === 'LOCKED') {
           toast('Sesi sudah dikunci', res.message, 'warning');
           if (here()) load(true);
@@ -718,31 +758,27 @@ const NilaiPage = (() => {
       '<div class="card mt-24"><div class="card-head" id="nh-head"></div><div id="nh-note"></div>' +
         '<div class="toolbar">' +
           '<div class="field narrow"><label for="nh-pel">Peleton</label><select id="nh-pel" class="select">' + options(pelOf(j.ID_Kelas), 'ID_Peleton', p => p.Nama_Peleton, st.pel, 'Semua') + '</select></div>' +
-          '<div class="field narrow"><label for="nh-status">Status</label><select id="nh-status" class="select"><option value="">Semua</option><option value="empty">Belum diisi</option><option value="saved">Sudah diisi</option><option value="draft">Draf / gagal</option></select></div>' +
+          '<div class="field narrow"><label for="nh-status">Status</label><select id="nh-status" class="select"><option value="">Semua</option><option value="empty">Belum diisi</option><option value="part">Belum lengkap</option><option value="full">Lengkap</option><option value="draft">Draf / gagal</option></select></div>' +
           '<div class="field search"><label for="nh-q">Cari</label><div class="input-wrap">' + icon('search', 'lead') + '<input id="nh-q" class="input with-lead" placeholder="Nama atau NRP…" autocomplete="off" value="' + esc(st.q) + '"></div></div>' +
-        '</div><div id="nh-table"></div></div>' +
+          tombolUnduh() +
+        '</div>' + lembarLegend() +
+        '<div class="sheet-wrap" id="nh-sheet"></div></div>' +
       '<div class="sticky-bar" id="nh-bar"></div>';
     $('#nh-status', el).value = st.status;
-    const host = $('#nh-table', el);
-    table = new Table(host, {
-      key: 'ID_Peserta', unit: 'peserta', pageSize: 50, sizes: [25, 50, 100], sort: { key: 'Nama_Lengkap', dir: 'asc' },
-      columns: [
-        { key: 'no', label: 'No', sort: false, cls: 'no', render: (r, i) => pad2(i + 1) },
-        { key: 'NRP', label: 'NRP', render: r => '<span class="nrp">' + esc(r.NRP) + '</span>' },
-        { key: 'Nama_Lengkap', label: 'Nama Peserta', cls: 'card-title', render: r => '<div class="t-name"><b>' + esc(r.Nama_Lengkap) + '</b><small>' + (r.Pangkat ? esc(r.Pangkat) + ' • ' : '') + esc(pelName(r.ID_Peleton)) + '</small></div>' },
-        { key: 'pel', label: 'Peleton', cls: 'm-hide', sort: r => pelName(r.ID_Peleton), render: r => esc(pelName(r.ID_Peleton)) },
-        { key: 'nilai', label: 'Nilai (0–100)', sort: r => { const v = valueOf(r.ID_Peserta); return v === '' ? '' : Number(v); }, render: r => gradeInput(r.ID_Peserta) },
-        { key: 'status', label: 'Status', sort: r => statusKey(r.ID_Peserta), render: r => '<span data-st="' + esc(r.ID_Peserta) + '">' + statusHtml(r.ID_Peserta) + '</span>' }
-      ],
-      empty: () => emptyState('users', 'Tidak ada peserta', st.q || st.pel || st.status ? 'Tidak ada peserta yang cocok dengan filter.' : 'Belum ada peserta di kelas ini. Tambahkan lewat menu Peserta Pelatihan.', st.q || st.pel || st.status ? '' : '<a class="btn primary" href="#/peserta">Buka Peserta Pelatihan</a>'),
-      afterRender: updateProgress
-    });
-    host.addEventListener('input', e => { if (e.target.matches('.grade-in')) onInput(e.target); });
+    table = true;
+    const host = $('#nh-sheet', el);
+    host.addEventListener('input', e => { if (e.target.matches('.skor')) onInput(e.target); });
+    host.addEventListener('focusin', e => { if (e.target.matches && e.target.matches('.skor') && e.target.select) e.target.select(); });
     host.addEventListener('keydown', e => {
-      if (!e.target.matches('.grade-in') || ['Enter', 'ArrowDown', 'ArrowUp'].indexOf(e.key) === -1) return;
+      if (!e.target.matches('.skor') || ['Enter', 'ArrowDown', 'ArrowUp'].indexOf(e.key) === -1) return;
       e.preventDefault();
-      const ins = $$('.grade-in:not([disabled])', host), i = ins.indexOf(e.target), n = ins[i + (e.key === 'ArrowUp' ? -1 : 1)];
-      if (n) { n.focus(); n.select(); } else if (e.key === 'Enter') { const b = $('#nh-done', el); if (b) b.focus(); }
+      const pid = e.target.dataset.pid, i = Number(e.target.dataset.i), r = shown.indexOf(pid);
+      let np = pid, ni = i;
+      if (e.key === 'Enter') { if (i < BUTIR.length - 1) ni = i + 1; else { np = shown[r + 1]; ni = 0; } }
+      else np = shown[r + (e.key === 'ArrowUp' ? -1 : 1)];
+      if (!np) { if (e.key === 'Enter') { const b = $('#nh-done', el); if (b) b.focus(); } return; }
+      const n = host.querySelector('.skor[data-pid="' + CSS.escape(np) + '"][data-i="' + ni + '"]');
+      if (n) { n.focus(); n.select(); }
     });
     host.addEventListener('click', e => { if (e.target.closest('[data-retry]')) load(true); });
     $('#nh-pel', el).onchange = e => { st.pel = e.target.value; refreshTable(); };
@@ -772,7 +808,7 @@ const NilaiPage = (() => {
         ? '<div class="card-body" style="padding-bottom:0"><div class="alert gold">' + icon('unlock') + '<div><b>Dibuka kembali oleh Admin Satdik</b> — ' + esc(s.Catatan_Admin) + '. Perbaiki nilai lalu tekan <b>Selesai &amp; Kirim ke Rekap</b> lagi.</div></div></div>'
         : '';
     const bar = $('#nh-bar', el);
-    bar.innerHTML = '<div class="prog"><div class="row between"><b>Peserta dinilai</b><span class="mono" id="nh-prog-t">0/0</span></div><div class="progress"><span id="nh-prog" style="width:0"></span></div></div>' +
+    bar.innerHTML = '<div class="prog"><div class="row between"><b>Peserta dinilai lengkap</b><span class="mono" id="nh-prog-t">0/0</span></div><div class="progress"><span id="nh-prog" style="width:0"></span></div></div>' +
       (lk
         ? '<span class="small muted">' + icon('lock', 'sm') + ' Nilai terkunci dan sudah dihitung di rekap</span><button type="button" class="btn outline" id="nh-reload">' + icon('refresh') + 'Periksa ulang</button>'
         : '<span class="small muted" id="nh-save-state"></span><button type="button" class="btn outline" id="nh-save"' + (d ? '' : ' disabled') + '>' + icon('save') + 'Simpan Draf</button>' +
@@ -780,83 +816,121 @@ const NilaiPage = (() => {
     updateProgress();
   }
 
+  /** 7 butir peserta: draf yang belum terkirim, atau yang tersimpan di server. */
   function valueOf(pid) {
     if (saver && saver.has(pid)) return saver.get(pid);
     const s = savedOf(pid);
-    return s ? s[0] : '';
+    return s ? s[0] : KOSONG();
   }
-  function statusKey(pid) { const s = saver ? saver.state(pid) : ''; return s || (savedOf(pid) ? 'saved' : 'empty'); }
-  function statusHtml(pid) {
-    if (locked()) return savedOf(pid) ? '<span class="badge ok">Masuk rekap</span>' : '<span class="badge off">Tidak dinilai</span>';
+  function hasBad(pid) { return Object.keys(bad).some(k => k.indexOf(pid + '|') === 0); }
+  function statusKey(pid) {
     const s = saver ? saver.state(pid) : '';
-    return saveBadge(s, savedOf(pid) ? 1 : 0, saver && saver.errors[pid]);
+    if (s) return s;
+    if (hasBad(pid)) return 'invalid';
+    const n = terisi(valueOf(pid));
+    return n === 0 ? 'empty' : n < BUTIR.length ? 'part' : 'full';
   }
-  function gradeInput(pid) {
-    const v = valueOf(pid), dirty = saver && saver.has(pid), lk = locked();
-    return '<div class="grade-cell"><input class="input grade-in' + (dirty ? ' dirty' : '') + '" inputmode="decimal" autocomplete="off" maxlength="6" data-pid="' + esc(pid) + '" value="' + esc(v === '' ? '' : String(v).replace('.', ',')) + '" placeholder="' + (lk ? '—' : '0–100') + '" aria-label="Nilai"' + (lk ? ' disabled' : '') + '><span class="of">/100</span></div>';
+  function statusHtml(pid) {
+    const n = terisi(valueOf(pid));
+    if (locked()) return n ? '<span class="badge ok">Masuk rekap</span>' : '<span class="badge off">Tidak dinilai</span>';
+    const k = statusKey(pid);
+    if (k === 'invalid') return '<span class="badge bad">Harus 0–' + PENILAIAN.SKOR_MAX + '</span>';
+    if (k === 'saving' || k === 'draft' || k === 'error') return saveBadge(k, 0, saver && saver.errors[pid]);
+    if (k === 'empty') return '<span class="badge empty">Belum diisi</span>';
+    if (k === 'part') return '<span class="badge part">Sebagian ' + n + '/' + BUTIR.length + '</span>';
+    return '<span class="badge ok">Lengkap</span>';
   }
 
   function onInput(input) {
     if (!saver) return;
-    const pid = input.dataset.pid, p = parseGrade(input.value), saved = savedOf(pid);
+    const pid = input.dataset.pid, i = Number(input.dataset.i), p = parseSkor(input.value), k = pid + '|' + i;
+    const cur = valueOf(pid).slice(), sv = savedOf(pid), base = sv ? sv[0] : KOSONG();
     input.classList.toggle('invalid', !!p.error);
-    if (p.error) {
-      saver.unset(pid);
-      const sEl = el.querySelector('[data-st="' + CSS.escape(pid) + '"]');
-      if (sEl) sEl.innerHTML = saveBadge('invalid');
-      return;
-    }
-    const val = p.empty ? '' : p.value, savedVal = saved ? saved[0] : '';
-    if (String(val) === String(savedVal)) saver.unset(pid); else saver.set(pid, val);
+    // Isian tidak valid: butir itu kembali ke nilai tersimpan (angka setengah-ketik seperti "1" dari "12" tidak ikut terkirim)
+    if (p.error) { bad[k] = 1; cur[i] = base[i]; } else { delete bad[k]; cur[i] = p.empty ? '' : p.value; }
+    if (JSON.stringify(cur) === JSON.stringify(base)) saver.unset(pid); else saver.set(pid, cur);
+    if (p.error) { updateRow(pid); updateProgress(); return; }
     input.classList.toggle('dirty', saver.has(pid));
+    updateRow(pid);
     updateProgress();
   }
 
   function updateRow(pid) {
+    const v = valueOf(pid), sums = jumlahAspek(v), any = terisi(v) > 0, dirty = !!(saver && saver.has(pid));
+    PENILAIAN.ASPEK.forEach((g, gi) => {
+      const b = el.querySelector('[data-j="' + CSS.escape(pid + '|' + gi) + '"]');
+      if (b) b.innerHTML = any ? fmtSkor(sums[gi]) : '<span class="miss">—</span>';
+    });
     const sEl = el.querySelector('[data-st="' + CSS.escape(pid) + '"]');
     if (sEl) sEl.innerHTML = statusHtml(pid);
-    const inp = el.querySelector('.grade-in[data-pid="' + CSS.escape(pid) + '"]');
-    if (inp) {
-      inp.classList.toggle('dirty', !!(saver && saver.has(pid)));
-      if (document.activeElement !== inp && !(saver && saver.has(pid))) { const v = valueOf(pid); inp.value = v === '' ? '' : String(v).replace('.', ','); inp.classList.remove('invalid'); }
-    }
+    $$('.skor[data-pid="' + CSS.escape(pid) + '"]', el).forEach(inp => {
+      inp.classList.toggle('dirty', dirty);
+      const i = Number(inp.dataset.i);
+      if (!dirty && document.activeElement !== inp && !bad[pid + '|' + i]) { inp.value = fmtSkor(v[i]); inp.classList.remove('invalid'); }
+    });
     updateSaveState();
   }
   function updateSaveState() {
     const box = $('#nh-save-state', el);
     if (!box) return;
-    const n = saver ? saver.count() : 0, err = saver ? Object.keys(saver.errors).length : 0;
-    box.innerHTML = err ? '<span style="color:var(--red)">' + icon('alert-circle', 'sm') + ' ' + err + ' gagal disimpan</span>' :
-      n ? icon('clock', 'sm') + ' ' + n + ' perubahan menunggu disimpan' : icon('check-circle', 'sm') + ' Draf tersimpan';
+    const n = saver ? saver.count() : 0, err = saver ? Object.keys(saver.errors).length : 0, inv = Object.keys(bad).length;
+    box.innerHTML = err ? '<span style="color:var(--red)">' + icon('alert-circle', 'sm') + ' ' + err + ' baris gagal disimpan</span>' :
+      inv ? '<span style="color:var(--red)">' + icon('alert-circle', 'sm') + ' ' + inv + ' isian bukan 0–' + PENILAIAN.SKOR_MAX + '</span>' :
+      n ? icon('clock', 'sm') + ' ' + n + ' baris menunggu disimpan' : icon('check-circle', 'sm') + ' Draf tersimpan';
   }
   function updateProgress() {
     const all = peserta();
-    const filled = all.filter(p => { const v = valueOf(p.ID_Peserta); return v !== '' && v != null; }).length;
+    let full = 0, part = 0;
+    all.forEach(p => { const n = terisi(valueOf(p.ID_Peserta)); if (n === BUTIR.length) full++; else if (n) part++; });
     const t = $('#nh-prog-t', el), b = $('#nh-prog', el);
-    if (t) t.textContent = filled + '/' + all.length + ' (' + (all.length ? Math.round(filled / all.length * 100) : 0) + '%)';
-    if (b) b.style.width = (all.length ? filled / all.length * 100 : 0) + '%';
+    if (t) t.textContent = full + '/' + all.length + (part ? ' • ' + part + ' sebagian' : '');
+    if (b) b.style.width = (all.length ? full / all.length * 100 : 0) + '%';
     updateSaveState();
   }
 
-  function rows() {
+  function rows(all) {
     const q = norm(st.q);
-    return peserta().filter(p => {
+    return all.filter(p => {
       if (st.pel && p.ID_Peleton !== st.pel) return false;
       if (q && norm(p.Nama_Lengkap).indexOf(q) === -1 && String(p.NRP).indexOf(q) === -1) return false;
       if (st.status) {
         const k = statusKey(p.ID_Peserta);
-        if (st.status === 'empty' && k !== 'empty') return false;
-        if (st.status === 'saved' && k !== 'saved') return false;
-        if (st.status === 'draft' && ['draft', 'error', 'saving'].indexOf(k) === -1) return false;
+        if (st.status === 'draft') return ['draft', 'error', 'saving', 'invalid'].indexOf(k) > -1;
+        return k === st.status;
       }
       return true;
     });
   }
-  function refreshTable(keepPage) {
-    const host = $('#nh-table', el);
+  /** Gambar ulang lembar. Peserta selalu urut ABJAD; nomor mengikuti urutan lengkap kelas. */
+  function refreshTable() {
+    const host = $('#nh-sheet', el);
     if (!host || !table) return;
-    if (!day()) { host.innerHTML = loadErr ? errorState(loadErr) : skeletonRows(6, 5); updateProgress(); return; }
-    table.set(rows(), keepPage);
+    if (!day()) { host.innerHTML = loadErr ? errorState(loadErr) : skeletonRows(6, 8); updateProgress(); return; }
+    const all = urutNama(peserta()), noOf = {};
+    all.forEach((p, i) => { noOf[p.ID_Peserta] = i + 1; });
+    const list = rows(all);
+    shown = list.map(p => p.ID_Peserta);
+    if (!all.length) host.innerHTML = emptyState('users', 'Belum ada peserta', 'Belum ada peserta di kelas ini. Tambahkan lewat menu Peserta Pelatihan.', '<a class="btn primary" href="#/peserta">Buka Peserta Pelatihan</a>');
+    else if (!list.length) host.innerHTML = emptyState('search', 'Tidak ada peserta', 'Tidak ada peserta yang cocok dengan filter.');
+    else host.innerHTML = lembarTabel(list.map(p => ({ p, no: noOf[p.ID_Peserta], v: valueOf(p.ID_Peserta) })), { edit: !locked(), status: statusHtml, dirty: pid => !!(saver && saver.has(pid)) });
+    updateProgress();
+  }
+
+  /** Unduh lembar sesi ini (format HARI pada berkas Excel PROLAT). */
+  function ekspor(kind, btn) {
+    const j = J(st.jid);
+    if (!j || !day()) return;
+    const all = urutNama(peserta());
+    const data = {
+      judul: 'PENILAIAN HARIAN PESERTA PELATIHAN', instansi: String(CFG.INSTANSI || 'SPN Polda Papua Barat').toUpperCase(),
+      ringkas: kelasName(j.ID_Kelas) + ' • ' + mapelName(j.ID_Mapel) + ' • ' + fmt.tgl(st.tgl),
+      info: [['Kelas', kelasName(j.ID_Kelas, true)], ['Mata Pelajaran', mapelName(j.ID_Mapel)],
+        ['Hari / Tanggal', tglPanjang(st.tgl, true) + ' • ' + fmt.jam(j.Jam_Mulai) + '–' + fmt.jam(j.Jam_Selesai) + ' WIT'],
+        ['Gadik', gadikName(j.ID_Gadik)], ['Status', locked() ? 'Selesai — sudah masuk rekap' : 'Draf — belum dikirim ke rekap']],
+      format: PENILAIAN, sheet: 'PENILAIAN HARIAN',
+      peserta: all.map(p => ({ nama: p.Nama_Lengkap, pn: pangkatNrp(p) })), nilai: all.map(p => valueOf(p.ID_Peserta))
+    };
+    unduhBerkas(kind === 'pdf' ? 'hariPdf' : 'hariXlsx', data, namaBerkas(['Penilaian-Harian', kelasName(j.ID_Kelas), mapelName(j.ID_Mapel), st.tgl], kind === 'pdf' ? 'pdf' : 'xlsx'), btn);
   }
 
   // ---------- aksi ----------
@@ -869,8 +943,13 @@ const NilaiPage = (() => {
   async function finish() {
     const j = J(st.jid);
     if (!j || locked() || !day()) return;
-    const bad = $$('.grade-in.invalid', el);
-    if (bad.length) { toast('Periksa nilai', bad.length + ' isian bukan angka 0–100. Perbaiki dulu sebelum mengirim.', 'error'); bad[0].focus(); return; }
+    const inv = Object.keys(bad);
+    if (inv.length) {
+      toast('Periksa nilai', inv.length + ' isian bukan angka 0–' + PENILAIAN.SKOR_MAX + '. Perbaiki dulu sebelum mengirim.', 'error');
+      const [pid, i] = inv[0].split('|'), f = el.querySelector('.skor[data-pid="' + CSS.escape(pid) + '"][data-i="' + i + '"]');
+      if (f) f.focus();
+      return;
+    }
     if (saver && saver.count()) {
       const done = busy($('#nh-done', el), 'Menyimpan draf…');
       await saver.flush();
@@ -878,12 +957,14 @@ const NilaiPage = (() => {
       if (saver && saver.count()) { toast('Belum bisa dikirim', 'Sebagian nilai gagal disimpan. Periksa koneksi lalu coba lagi.', 'error'); return; }
     }
     if (locked()) return;
-    const all = peserta(), filled = all.filter(p => savedOf(p.ID_Peserta)).length, empty = all.length - filled;
-    if (!filled) { toast('Belum ada nilai', 'Isi minimal satu nilai sebelum mengirim ke rekap.', 'warning'); const f = $('.grade-in', el); if (f) f.focus(); return; }
+    const all = peserta(), counts = all.map(p => terisi((savedOf(p.ID_Peserta) || [KOSONG()])[0]));
+    const filled = counts.filter(n => n > 0).length, full = counts.filter(n => n === BUTIR.length).length, part = filled - full, empty = all.length - filled;
+    if (!filled) { toast('Belum ada nilai', 'Isi minimal satu peserta sebelum mengirim ke rekap.', 'warning'); const f = $('.skor', el); if (f) f.focus(); return; }
     const ok = await confirmBox({
       title: 'Selesai & kirim ke rekap?', icon: 'send', okText: 'Ya, kirim ke rekap',
-      html: '<b>' + filled + ' dari ' + all.length + ' peserta</b> sudah dinilai untuk <b>' + esc(mapelName(j.ID_Mapel)) + '</b> — ' + esc(kelasName(j.ID_Kelas)) + ', ' + esc(fmt.tgl(st.tgl, { hari: true })) + '.' +
-        (empty ? '<br><br><span style="color:var(--red)"><b>' + empty + ' peserta belum diisi</b> dan tidak ikut dihitung pada sesi ini.</span>' : '') +
+      html: '<b>' + full + ' dari ' + all.length + ' peserta</b> sudah dinilai lengkap (' + BUTIR.length + ' butir) untuk <b>' + esc(mapelName(j.ID_Mapel)) + '</b> — ' + esc(kelasName(j.ID_Kelas)) + ', ' + esc(fmt.tgl(st.tgl, { hari: true })) + '.' +
+        (part ? '<br><br><span style="color:#9A6700"><b>' + part + ' peserta baru diisi sebagian</b> — butir yang kosong dihitung 0.</span>' : '') +
+        (empty ? '<br><br><span style="color:var(--red)"><b>' + empty + ' peserta belum diisi</b> — dihitung 0 pada hari ini (sesuai rumus penilaian).</span>' : '') +
         '<br><br>Setelah dikirim, nilai sesi ini <b>dikunci</b>. Koreksi hanya dapat dilakukan setelah Admin Satdik membuka kunci.'
     });
     if (!ok) return;
@@ -915,9 +996,9 @@ const NilaiPage = (() => {
       if (st.jid && !list.some(j => j.ID_Jadwal === st.jid)) st.jid = '';
       if (!st.jid && list.length === 1) st.jid = list[0].ID_Jadwal;
       syncHash(); useSaver(); renderSesi(); renderDraf();
-      const a = document.activeElement, typing = el.contains(a) && a.matches('.grade-in') && !locked();
+      const a = document.activeElement, typing = el.contains(a) && a.matches('.skor') && !locked();
       if (workFor !== tgl + '|' + st.jid) renderWork();
-      else if (typing) { $$('.grade-in', el).forEach(i => updateRow(i.dataset.pid)); renderHead(); }
+      else if (typing) { shown.forEach(updateRow); renderHead(); }
       else if (st.jid) { renderHead(); refreshTable(true); }
     }, {
       fresh: force ? 0 : 20000, force,
@@ -939,13 +1020,177 @@ const NilaiPage = (() => {
       if (!el) return;
       renderSesi(); renderDraf();
       const a = document.activeElement;
-      if (el.contains(a) && a.matches('.grade-in')) return;
+      if (el.contains(a) && a.matches('.skor')) return;
       useSaver(); ensureWork();
     },
     leave() { Object.keys(savers).forEach(k => { if (savers[k].count()) savers[k].flush(); }); }
   };
 })();
 page('nilai', NilaiPage);
+
+// ==========================================================================
+// REKAP AKHIR — Admin & Gadik (lembar NIL AKHIR sesuai berkas PROLAT)
+// ==========================================================================
+function rumusAkhir() {
+  return PENILAIAN.ASPEK.map(g => g.nama.replace('Aspek ', '') + ' ' + Math.round(g.bobot * 100) + '%').join(' + ');
+}
+const RekapAkhirPage = (() => {
+  const st = { kelas: '', pel: '', q: '', urut: 'abjad' };
+  let el, err = null, table = null, hasil = null;
+  const data = k => (S.data.rekap || {})[k];
+
+  function load(k, force) {
+    S.data.rekap = S.data.rekap || {};
+    err = null;
+    swr('rekap:' + k, 'rekap', { idKelas: k }, d => {
+      S.data.rekap[k] = d;
+      if (el && !el.hidden && st.kelas === k && !_modals.length) fill();
+    }, { fresh: force ? 0 : 5000, force, onError: res => { err = res.message; if (st.kelas === k) fill(); } });
+  }
+
+  function renderList() {
+    const kel = kelasList();
+    el.innerHTML = pageHead({
+      eyebrow: 'Rekapitulasi // Nilai Akhir PROLAT',
+      title: 'Rekap Akhir',
+      desc: 'Pilih kelas untuk melihat <b>NIL AKHIR</b> dan <b>peringkat</b> peserta. Dihitung dari seluruh penilaian harian yang sudah dikirim Gadik ke rekap: ' + esc(rumusAkhir()) + '.'
+    }) + (kel.length
+      ? '<div class="grid c3">' + kel.map(kelasCard).join('') + '</div>'
+      : emptyState('building', 'Belum ada kelas', S.role === 'Admin' ? 'Tambahkan angkatan & kelas di Master Data.' : 'Akun Anda belum ditugaskan ke kelas. Hubungi Admin Satdik.'));
+  }
+  function kelasCard(k) {
+    const d = data(k.ID_Kelas) || cacheGet('rekap:' + k.ID_Kelas);
+    const n = d ? hariPenilaian(d.sesi).length : null, draf = d ? d.sesi.filter(s => s.Status !== 'Selesai').length : 0;
+    return '<a class="shortcut kelas-card" href="#/rekap-akhir/' + encodeURIComponent(k.ID_Kelas) + '">' +
+      '<div class="row between"><div class="icon-tile">' + icon('medal') + '</div>' + (isAktif(k.Status) ? '' : '<span class="badge off">Nonaktif</span>') + '</div>' +
+      '<h3>' + esc(k.Nama_Kelas) + '</h3><p>' + esc(k.Nama_Angkatan) + '</p>' +
+      '<div class="kc-meta"><span>' + icon('users', 'sm') + pesertaCount(k.ID_Kelas) + ' peserta</span>' +
+        (n == null ? '' : '<span>' + icon('calendar', 'sm') + n + ' hari dinilai</span>') + (draf ? '<span class="draf">' + draf + ' sesi draf</span>' : '') + '</div>' +
+      '<span class="go">Lihat nilai akhir' + icon('arrow-right', 'sm') + '</span></a>';
+  }
+
+  function renderDetail() {
+    const kl = R().kelas[st.kelas];
+    if (!kl) {
+      el.innerHTML = pageHead({ eyebrow: 'Rekapitulasi // Nilai Akhir', title: 'Rekap Akhir' }) +
+        emptyState('building', 'Kelas tidak ditemukan', 'Kelas ini tidak ada atau bukan kelas penugasan Anda.', '<a class="btn primary" href="#/rekap-akhir">Pilih kelas</a>');
+      table = null;
+      return;
+    }
+    el.innerHTML = pageHead({
+      eyebrow: 'Rekap Akhir // ' + kl.Nama_Angkatan,
+      title: 'Nilai Akhir — ' + kl.Nama_Kelas,
+      desc: 'NIL AKHIR = ' + esc(rumusAkhir()) + '. Nilai aspek = jumlah aspek seluruh hari ÷ jumlah hari ÷ banyak butir × 10. Klik baris untuk rincian per hari.',
+      actions: '<a class="btn outline" href="#/rekap-akhir">' + icon('arrow-left') + 'Semua kelas</a><button class="btn outline" id="ra-refresh">' + icon('refresh') + 'Segarkan</button>'
+    }) +
+      '<div class="grid c4 keep2" id="ra-stats"></div><div id="ra-note"></div>' +
+      '<div class="card mt-24"><div class="toolbar">' +
+        '<div class="field narrow"><label for="ra-pel">Peleton</label><select id="ra-pel" class="select">' + options(pelOf(st.kelas), 'ID_Peleton', p => p.Nama_Peleton, st.pel, 'Semua') + '</select></div>' +
+        '<div class="field search"><label for="ra-q">Cari peserta</label><div class="input-wrap">' + icon('search', 'lead') + '<input id="ra-q" class="input with-lead" placeholder="Nama atau NRP…" autocomplete="off" value="' + esc(st.q) + '"></div></div>' +
+        '<div class="field narrow"><label>Urutkan</label><div class="seg" id="ra-urut"><button type="button" data-urut="abjad">Abjad</button><button type="button" data-urut="rank">Peringkat</button></div></div>' +
+        tombolUnduh() +
+      '</div><div id="ra-table"></div></div>';
+    $('#ra-refresh', el).onclick = () => load(st.kelas, true);
+    $('#ra-pel', el).onchange = e => { st.pel = e.target.value; fill(); };
+    $('#ra-q', el).addEventListener('input', debounce(e => { st.q = e.target.value; fill(); }, 250));
+    $('#ra-urut', el).onclick = e => { const b = e.target.closest('[data-urut]'); if (b) { st.urut = b.dataset.urut; table.sort = { key: st.urut === 'rank' ? 'rank' : 'no', dir: 'asc' }; fill(); } };
+    el.querySelector('.card').addEventListener('click', e => { const b = e.target.closest('[data-unduh]'); if (b) ekspor(b.dataset.unduh, b); });
+    const A = PENILAIAN.ASPEK;
+    table = new Table($('#ra-table', el), {
+      key: 'ID_Peserta', unit: 'peserta', pageSize: 50, sizes: [25, 50, 100], cls: 'rekap akhir', sort: { key: st.urut === 'rank' ? 'rank' : 'no', dir: 'asc' },
+      columns: [
+        { key: 'no', label: 'No', cls: 'no', sort: r => r.no, render: r => pad2(r.no) },
+        { key: 'Nama', label: 'Nama', cls: 'card-title sticky', thCls: 'sticky', render: r => '<div class="t-name"><b>' + esc(r.Nama) + '</b><small>' + esc(pelName(r.p.ID_Peleton)) + '</small></div>' },
+        { key: 'pn', label: 'Pangkat / NRP', sort: r => String(r.p.NRP), render: r => '<span class="mono small nowrap">' + esc(pangkatNrp(r.p)) + '</span>' }
+      ].concat(A.map((g, gi) => ({
+        key: 'a' + gi, label: 'Jumlah ' + g.nama, labelHtml: 'JUMLAH<span class="full">' + esc(g.nama) + '</span>', num: true,
+        sort: r => (r.asp[gi] == null ? '' : r.asp[gi]), render: r => (r.asp[gi] == null ? '<span class="miss">—</span>' : fmt.num(r.asp[gi], 2))
+      }))).concat([
+        { key: 'na', label: 'Nil Akhir', labelHtml: 'NIL AKHIR', num: true, cls: 'avg', thCls: 'avg', sort: r => (r.na == null ? '' : r.na), render: r => (r.na == null ? '<span class="miss">—</span>' : '<b>' + fmt.num(r.na, 2) + '</b>') },
+        { key: 'rank', label: 'Rank', num: true, sort: r => (r.rank == null ? '' : r.rank), render: r => (r.rank == null ? '<span class="miss">—</span>' : '<span class="rank' + (r.rank <= 3 ? ' top' : '') + '">' + r.rank + '</span>') }
+      ]),
+      onRow: id => detail(hasil.rows.find(r => r.ID_Peserta === id)),
+      empty: () => emptyState('users', 'Tidak ada peserta', st.q || st.pel ? 'Tidak ada peserta yang cocok dengan filter.' : 'Belum ada peserta di kelas ini.')
+    });
+    $('#ra-table', el).addEventListener('click', e => { if (e.target.closest('[data-retry]')) load(st.kelas, true); });
+    fill();
+  }
+
+  function fill() {
+    if (!el || !table) return;
+    $$('#ra-urut [data-urut]', el).forEach(b => b.classList.toggle('on', b.dataset.urut === st.urut));
+    const d = data(st.kelas);
+    if (!d) { $('#ra-table', el).innerHTML = err ? errorState(err) : skeletonRows(8, 7); $('#ra-stats', el).innerHTML = ''; $('#ra-note', el).innerHTML = ''; return; }
+    hasil = rekapAkhir(d, S.boot.peserta.filter(p => p.ID_Kelas === st.kelas));
+    const vals = hasil.rows.map(r => r.na).filter(v => v != null), top = hasil.rows.find(r => r.rank === 1);
+    const draf = d.sesi.filter(s => s.Status !== 'Selesai').length;
+    const first = hasil.n ? hasil.units[0].s.Tanggal : '', last = hasil.n ? hasil.units[hasil.n - 1].s.Tanggal : '';
+    $('#ra-stats', el).innerHTML =
+      stat({ label: 'Hari Dinilai', value: hasil.n, unit: 'hari', icon: 'calendar', cap: hasil.n ? esc(fmt.tgl(first, { short: true }) + (first !== last ? ' – ' + fmt.tgl(last) : ' ' + first.slice(0, 4))) : 'Belum ada penilaian dikirim' }) +
+      stat({ label: 'Rata-rata Nil Akhir', value: vals.length ? fmt.num(avg(vals), 2) : '—', unit: vals.length ? '/ 100' : '', icon: 'medal', cap: hasil.rows.length + ' peserta' }) +
+      stat({ label: 'Peringkat 1', value: top ? fmt.num(top.na, 2) : '—', icon: 'shield-star', cap: top ? esc(top.Nama) : '—' }) +
+      stat({ label: 'Sesi Draf', value: draf, unit: 'sesi', icon: 'clock', tone: draf ? 'red' : '', cap: draf ? 'Belum dikirim Gadik — belum dihitung' : 'Semua sesi sudah dihitung' });
+    $('#ra-note', el).innerHTML = !hasil.n
+      ? '<div class="notice mt-24"><div class="icon-tile">' + icon('info') + '</div><div><b>Belum ada penilaian harian yang masuk rekap</b><p>Nilai akhir muncul setelah Gadik menekan <b>Selesai &amp; Kirim ke Rekap</b> pada penilaian harian kelas ini.</p></div></div>'
+      : draf ? '<div class="notice mt-24"><div class="icon-tile">' + icon('clock') + '</div><div><b>' + draf + ' sesi masih draf</b><p>Nilai sesi draf belum dihitung. Nilai akhir di bawah memakai ' + hasil.n + ' hari yang sudah dikirim.</p></div></div>' : '';
+    const q = norm(st.q);
+    table.sort = { key: st.urut === 'rank' ? 'rank' : 'no', dir: 'asc' };
+    table.set(hasil.rows.filter(r => (!st.pel || r.p.ID_Peleton === st.pel) && (!q || norm(r.Nama).indexOf(q) > -1 || String(r.p.NRP).indexOf(q) > -1)), true);
+  }
+
+  function detail(r) {
+    if (!r) return;
+    const A = PENILAIAN.ASPEK;
+    openModal({
+      drawer: true, title: r.Nama, sub: pangkatNrp(r.p) + ' • ' + pelName(r.p.ID_Peleton) + ' • ' + kelasName(st.kelas), icon: 'user',
+      body: '<div class="grid c2"><div class="stat"><div class="label-mono">Nil Akhir</div><div class="big">' + (r.na == null ? '—' : fmt.num(r.na, 2)) + '</div></div>' +
+        '<div class="stat"><div class="label-mono">Peringkat</div><div class="big">' + (r.rank == null ? '—' : r.rank) + '<small>dari ' + hasil.rows.length + '</small></div></div></div>' +
+        '<ul class="list-clean">' + A.map((g, gi) => '<li><div class="grow"><b>' + esc(g.nama) + '</b><div class="small muted">Bobot ' + Math.round(g.bobot * 100) + '% • ' + g.butir.join(', ') + '</div></div><b class="mono">' + (r.asp[gi] == null ? '—' : fmt.num(r.asp[gi], 2)) + '</b></li>').join('') + '</ul>' +
+        '<div><div class="label-mono" style="margin-bottom:8px">Rincian per hari</div>' + (r.per.length
+          ? '<div class="table-wrap"><table class="dt"><thead><tr><th>Hari</th><th>Mapel</th>' + A.map(g => '<th class="num">Σ ' + esc(g.nama.replace('Aspek ', '')) + '</th>').join('') + '<th class="num">Nilai</th></tr></thead><tbody>' +
+            r.per.map(x => '<tr><td><b>' + esc(x.u.label) + '</b><div class="small muted">' + esc(fmt.tgl(x.u.s.Tanggal, { hari: true, short: true })) + '</div></td><td>' + esc(mapelName(x.u.s.ID_Mapel)) + '</td>' +
+              x.j.map(v => '<td class="num mono">' + (terisi(x.v) ? fmtSkor(v) : '<span class="miss">0</span>') + '</td>').join('') + '<td class="num mono"><b>' + fmt.num(x.nh, 2) + '</b></td></tr>').join('') + '</tbody></table></div>'
+          : '<p class="muted">Belum ada penilaian harian yang dikirim.</p>') + '</div>'
+    });
+  }
+
+  function ekspor(kind, btn) {
+    const d = data(st.kelas), kl = R().kelas[st.kelas];
+    if (!d || !kl) return;
+    const res = rekapAkhir(d, S.boot.peserta.filter(p => p.ID_Kelas === st.kelas));
+    if (!res.n) return toast('Belum ada nilai', 'Belum ada penilaian harian yang dikirim ke rekap untuk kelas ini.', 'warning');
+    const first = res.units[0].s.Tanggal, last = res.units[res.n - 1].s.Tanggal;
+    const info = [['Kelas', kelasName(st.kelas, true)], ['Jumlah hari penilaian', res.n + ' hari'], ['Periode', first === last ? tglPanjang(first) : tglPanjang(first) + ' – ' + tglPanjang(last)]];
+    const out = {
+      judul: 'REKAPITULASI NILAI AKHIR PESERTA PELATIHAN', instansi: String(CFG.INSTANSI || 'SPN Polda Papua Barat').toUpperCase(), ringkas: kl.Nama_Kelas, info, format: PENILAIAN,
+      peserta: res.rows.map(r => ({ nama: r.Nama, pn: pangkatNrp(r.p) })),
+      hari: res.units.map((u, ui) => ({
+        label: u.label, judul: 'PENILAIAN HARIAN PESERTA PELATIHAN',
+        info: [['Kelas', kelasName(st.kelas, true)], ['Mata Pelajaran', mapelName(u.s.ID_Mapel) + (u.s.Impor ? ' (hasil impor)' : '')], ['Hari / Tanggal', tglPanjang(u.s.Tanggal, true) + ' (' + u.label + ')'], ['Gadik', u.s.ID_Gadik ? gadikName(u.s.ID_Gadik) : '—']],
+        nilai: res.rows.map(r => r.per[ui].v)
+      })),
+      hasil: res.rows.map(r => ({ asp: r.asp, na: r.na, rank: r.rank }))
+    };
+    unduhBerkas(kind === 'pdf' ? 'akhirPdf' : 'akhirXlsx', out, namaBerkas(['Rekap-Akhir', kl.Nama_Kelas, kl.Nama_Angkatan], kind === 'pdf' ? 'pdf' : 'xlsx'), btn);
+  }
+
+  return {
+    title: param => (param && R().kelas[param] ? 'Rekap Akhir — ' + R().kelas[param].Nama_Kelas : 'Rekap Akhir'),
+    roles: ['Admin', 'Gadik'],
+    show(root, param) {
+      el = root;
+      const k = String(param || '').split('/')[0];
+      if (k) {
+        if (k !== st.kelas) { st.pel = ''; st.q = ''; }
+        st.kelas = k;
+        renderDetail();
+        if (R().kelas[k]) load(k, false);
+      } else { st.kelas = ''; table = null; renderList(); }
+    },
+    onBoot(root, param) { if (!el || _modals.length) return; this.show(root, param); }
+  };
+})();
+page('rekap-akhir', RekapAkhirPage);
 
 // ==========================================================================
 // NILAI MENTAL KEPRIBADIAN — Pengasuh (US-11)
@@ -1171,8 +1416,8 @@ function renderSettings(el) {
     '</div>' +
     (isAdmin ? '<div class="card mt-24"><div class="card-head"><div class="icon-tile">' + icon('database') + '</div><div class="grow"><h3>Pemeliharaan Sistem</h3><div class="sub">Berjalan otomatis di server Apps Script</div></div></div><div class="card-body"><div class="grid c3">' +
       '<div><div class="label-mono">Cadangan harian</div><p class="mt-8">Salinan database dibuat otomatis setiap pukul 02.00 WIT ke folder <b>Cadangan Harian</b> di Google Drive (14 salinan terakhir disimpan).</p></div>' +
-      '<div><div class="label-mono">Penguncian nilai harian</div><p class="mt-8">Nilai yang sudah dikirim Gadik ke rekap otomatis terkunci. Buka kunci untuk koreksi lewat <b>Rekap Nilai → Sesi Penilaian</b>.</p></div>' +
-      '<div><div class="label-mono">Versi</div><p class="mt-8"><span class="mono">SIPL ' + esc(set.version || '1.1.0') + '</span> • Server Google Apps Script • Database Google Sheets</p></div>' +
+      '<div><div class="label-mono">Penguncian nilai harian</div><p class="mt-8">Nilai yang sudah dikirim Gadik ke rekap otomatis terkunci. Buka kunci untuk koreksi lewat <b>Rekap Harian → Penilaian Harian</b>.</p></div>' +
+      '<div><div class="label-mono">Versi</div><p class="mt-8"><span class="mono">SIPL ' + esc(set.version || FE_VERSION) + '</span> • Server Google Apps Script • Database Google Sheets</p></div>' +
       '</div></div></div>' : '');
 
   const form = $('#pw-form', el);

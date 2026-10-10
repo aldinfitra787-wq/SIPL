@@ -6,7 +6,7 @@
 
 const CFG = Object.assign({ GAS_URL: '', APP_NAME: 'SIPL — SPN Polda Papua Barat', IDLE_MINUTES: 60, TAHUN_AJARAN: '' }, window.SIPL_CONFIG || {});
 const GAS_URL = String(CFG.GAS_URL || '').trim();
-const FE_VERSION = '1.1.0';              // naikkan bersama ?v= di index.html saat rilis
+const FE_VERSION = '1.2.0';              // naikkan bersama ?v= di index.html saat rilis
 const LS = 'sipl:v1:';
 const TZ = 'Asia/Jayapura';
 const HARI = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
@@ -242,6 +242,115 @@ function initials(name) {
 }
 function norm(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
 const collator = new Intl.Collator('id', { numeric: true, sensitivity: 'base' });
+
+// --------------------------------------------------------------------------
+// Format penilaian PROLAT (sama dengan server & berkas PENILAIAN_PROLAT_2026.xlsx)
+// Butir 0–10 → JUMLAH per aspek → nilai aspek = Σ JUMLAH ÷ hari ÷ butir × 10
+// → NILAI AKHIR = Perilaku 30% + Teori 20% + Praktek 50% → RANK.
+// --------------------------------------------------------------------------
+const PENILAIAN = {
+  SKOR_MAX: 10,
+  ASPEK: [
+    { kode: 'A', nama: 'Aspek Perilaku', butir: ['A1', 'A2', 'A3'], bobot: 0.3 },
+    { kode: 'B', nama: 'Aspek Teori', butir: ['B1', 'B2'], bobot: 0.2 },
+    { kode: 'C', nama: 'Aspek Praktek', butir: ['C1', 'C2'], bobot: 0.5 }
+  ]
+};
+const BUTIR = PENILAIAN.ASPEK.reduce((a, g) => a.concat(g.butir), []);
+const KOSONG = () => BUTIR.map(() => '');
+
+/** Skor satu butir 0–10 (koma/titik desimal, maks. 2 angka di belakang koma). */
+function parseSkor(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (s === '') return { empty: true };
+  const n = Number(s.replace(',', '.'));
+  if (!isFinite(n) || n < 0 || n > PENILAIAN.SKOR_MAX || !/^\d{1,2}([.,]\d{1,2})?$/.test(s)) return { error: true };
+  return { value: Math.round(n * 100) / 100 };
+}
+/** JUMLAH per aspek (butir kosong = 0) → [ΣPerilaku, ΣTeori, ΣPraktek]. */
+function jumlahAspek(v) {
+  let i = 0;
+  return PENILAIAN.ASPEK.map(g => {
+    let s = 0;
+    g.butir.forEach(() => { const x = v ? v[i] : ''; i++; if (x !== '' && x != null && isFinite(Number(x))) s += Number(x); });
+    return Math.round(s * 100) / 100;
+  });
+}
+/** Nilai harian skala 100 (dipakai untuk ringkasan; rata-ratanya = NILAI AKHIR). */
+function nilaiHarian(v) {
+  const j = jumlahAspek(v);
+  return Math.round(PENILAIAN.ASPEK.reduce((s, g, gi) => s + j[gi] / g.butir.length * 10 * g.bobot, 0) * 100) / 100;
+}
+function terisi(v) { return (v || []).filter(x => x !== '' && x != null).length; }
+function fmtSkor(x) { return x === '' || x == null ? '' : String(x).replace('.', ','); }
+function urutNama(list) { return list.slice().sort((a, b) => collator.compare(a.Nama_Lengkap, b.Nama_Lengkap) || collator.compare(String(a.NRP), String(b.NRP))); }
+function pangkatNrp(p) { return (p.Pangkat ? p.Pangkat + ' / ' : '') + (p.NRP || ''); }
+
+/** Sesi yang sudah dikirim → urutan "HARI 1, HARI 2, …" (dua sesi di tanggal sama: "HARI 2-1", "HARI 2-2"). */
+function hariPenilaian(sesi) {
+  const byDate = {};
+  (sesi || []).filter(s => s.Status === 'Selesai').forEach(s => { (byDate[s.Tanggal] = byDate[s.Tanggal] || []).push(s); });
+  const out = [];
+  Object.keys(byDate).sort().forEach((t, di) => {
+    const list = byDate[t].sort((a, b) => (a.Jam || '').localeCompare(b.Jam || '') || String(a.ID_Jadwal).localeCompare(String(b.ID_Jadwal)));
+    list.forEach((s, k) => out.push({ s, label: 'HARI ' + (di + 1) + (list.length > 1 ? '-' + (k + 1) : '') }));
+  });
+  return out;
+}
+
+/**
+ * NIL AKHIR per peserta sesuai rumus berkas Excel:
+ *   aspek = Σ JUMLAH aspek seluruh hari ÷ n hari ÷ banyak butir × 10
+ *   NA = Σ aspek × bobot;  RANK = RANK(NA) + COUNTIF(baris di atas dengan NA sama) − 1 (urut abjad).
+ */
+function rekapAkhir(d, pesertaList) {
+  const units = hariPenilaian(d.sesi), n = units.length, A = PENILAIAN.ASPEK;
+  const rows = urutNama(pesertaList).map((p, i) => {
+    const per = units.map(u => { const v = ((d.nilai || {})[u.s.ID_Sesi] || {})[p.ID_Peserta] || KOSONG(); return { u, v, j: jumlahAspek(v), nh: nilaiHarian(v) }; });
+    const asp = A.map((g, gi) => (n ? per.reduce((s, x) => s + x.j[gi], 0) / n / g.butir.length * 10 : null));
+    const na = n ? asp.reduce((s, x, gi) => s + x * A[gi].bobot, 0) : null;
+    return { ID_Peserta: p.ID_Peserta, p, no: i + 1, Nama: p.Nama_Lengkap, per, asp, na };
+  });
+  rows.forEach((r, i) => {
+    if (r.na == null) { r.rank = null; return; }
+    const k = Math.round(r.na * 1e6);
+    r.rank = 1 + rows.filter((o, j) => { const ok = Math.round(o.na * 1e6); return ok > k || (ok === k && j < i); }).length;
+  });
+  return { units, n, rows };
+}
+
+/** Tanggal panjang Indonesia: "Senin, 5 Oktober 2026". */
+const BULAN_P = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+function tglPanjang(t, withHari) { const p = tglParts(t); return p ? (withHari ? hariOf(t) + ', ' : '') + p[2] + ' ' + BULAN_P[p[1] - 1] + ' ' + p[0] : (t || ''); }
+
+// --------------------------------------------------------------------------
+// Unduh PDF / Excel (modul export.js dimuat saat pertama kali dibutuhkan)
+// --------------------------------------------------------------------------
+let _eksporP = null;
+function muatEkspor() {
+  if (window.Ekspor) return Promise.resolve();
+  if (!_eksporP) _eksporP = loadScript('js/export.js').catch(e => { _eksporP = null; throw e; });
+  return _eksporP;
+}
+function namaBerkas(parts, ext) {
+  return parts.filter(Boolean).join('_').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9_.-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 120) + '.' + ext;
+}
+async function unduhBerkas(jenis, data, nama, btn) {
+  const done = busy(btn, 'Menyiapkan…');
+  try {
+    await muatEkspor();
+    const blob = window.Ekspor[jenis](data);
+    window.Ekspor.simpan(blob, nama);
+    toast('Berkas siap', nama, 'success');
+  } catch (e) {
+    console.error(e);
+    toast('Berkas gagal dibuat', 'Periksa koneksi internet lalu coba lagi.', 'error');
+  } finally { done(); }
+}
+function tombolUnduh() {
+  return '<div class="unduh"><button type="button" class="btn outline sm" data-unduh="pdf">' + icon('download', 'sm') + 'Unduh PDF</button>' +
+    '<button type="button" class="btn outline sm" data-unduh="xlsx">' + icon('file-sheet', 'sm') + 'Unduh Excel</button></div>';
+}
 
 /** Validasi nilai 0–100 di klien (sama dengan server). */
 function parseGrade(v) {
