@@ -74,6 +74,9 @@ function showLogin(msg) {
     c.innerHTML = icon('alert-triangle') + '<div><b>Server belum dihubungkan.</b> Isi <span class="mono">GAS_URL</span> di berkas <span class="mono">js/config.js</span> dengan URL Web App (/exec) dari Apps Script.</div>';
   }
   setTimeout(() => { const u = $('#lg-user'); if (u && !u.value) u.focus(); }, 50);
+  setTimeout(siapkanAdmin, 1200);
+  const pw = $('#lg-pass');
+  if (pw && !pw._warm) { pw._warm = 1; pw.addEventListener('focus', () => { if (Date.now() - (S._warmAt || 0) > 60000) { S._warmAt = Date.now(); warmUp(); } }); }
   fetchPublicInfo().then(info => {
     if (!info) return;
     Store.set('public', { appName: info.appName, logoUrl: info.logoUrl, logoVer: info.logoVer || '' });
@@ -104,8 +107,8 @@ const LoginProgress = (() => {
     if (!jalan) return;
     const dt = Math.min(64, now - (last || now)); last = now;
     // merayap pelan menuju batas tahap saat menunggu server, lalu mengejar target dengan halus
-    if (cap > target) target = Math.min(cap, target + (cap - target) * dt / 2600);
-    cur += (target - cur) * Math.min(1, dt / (GERAK ? 140 : 1));
+    if (cap > target) target = Math.min(cap, target + (cap - target) * dt / 900);
+    cur += (target - cur) * Math.min(1, dt / (GERAK ? 45 : 1));
     if (Math.abs(target - cur) < 0.05) cur = target;
     paint();
     rid = raf(tick);
@@ -130,18 +133,27 @@ const LoginProgress = (() => {
     step,
     async finish(label) {
       step(100, label);
-      await reach(100);
-      await new Promise(r => setTimeout(r, Math.max(GERAK ? 380 : 120, 1100 - (Date.now() - t0))));
+      await reach(100);                     // ± 0,15 detik: angka mengejar 100% lalu langsung masuk
+      await new Promise(r => setTimeout(r, GERAK ? 90 : 0));
     },
     hide(keepLogin) {
       if (!el) return;
       jalan = false;
       el.classList.add('out'); el.classList.remove('on');
       if (!keepLogin) $('#login').classList.remove('is-loading');
-      setTimeout(() => { el.hidden = true; el.classList.remove('out'); }, GERAK ? 650 : 0);
+      setTimeout(() => { el.hidden = true; el.classList.remove('out'); }, GERAK ? 420 : 0);
     }
   };
 })();
+
+// Modul admin diunduh lebih dulu ke cache browser selagi halaman login terbuka (tidak dijalankan),
+// sehingga setelah server menjawab, modul langsung tersedia tanpa jeda tambahan.
+let _adminPrefetch = false;
+function siapkanAdmin() {
+  if (_adminPrefetch || window.ADMIN_READY) return;
+  _adminPrefetch = true;
+  try { const l = document.createElement('link'); l.rel = 'prefetch'; l.as = 'script'; l.href = 'js/admin.js?v=' + FE_VERSION; document.head.appendChild(l); } catch (e) { /* abaikan */ }
+}
 
 async function doLogin(e) {
   e.preventDefault();
@@ -155,9 +167,10 @@ async function doLogin(e) {
   const done = busy($('#lg-submit'), 'Memverifikasi…');
   const fokus = document.activeElement; if (fokus && fokus.blur) fokus.blur();   // tutup keyboard di HP
   LoginProgress.show();
-  LoginProgress.step(8, 'Menghubungkan ke server SIPL…', 30);
-  setTimeout(() => LoginProgress.step(18, 'Memverifikasi akun & kata sandi…', 64), 450);
+  LoginProgress.step(12, 'Menghubungkan ke server SIPL…', 40);
+  const tVer = setTimeout(() => LoginProgress.step(30, 'Memverifikasi akun & kata sandi…', 82), 160);
   const res = await api('login', { username: user.value.trim(), password: pass.value }, { tries: 2 });
+  clearTimeout(tVer);
   if (!res.success) {
     LoginProgress.hide();
     done();
@@ -167,17 +180,13 @@ async function doLogin(e) {
     return;
   }
   const boot = res.data.boot;
-  LoginProgress.step(72, 'Akun terverifikasi • memuat data ' + (boot.me.Role === 'Admin' ? 'satuan pendidikan' : 'kelas Anda') + '…', 80);
+  LoginProgress.step(84, 'Akun terverifikasi • menyiapkan data ' + (boot.me.Role === 'Admin' ? 'satuan pendidikan' : 'kelas Anda') + '…', 94);
   S.token = res.data.token; S.uid = boot.me.ID_User; S.role = boot.me.Role;
   Store.set('session', { token: S.token, uid: S.uid, role: S.role, t: Date.now(), act: Date.now() });
   pass.value = '';
   lastAct = Date.now();
   if (boot.me.Role === 'Admin' && !window.ADMIN_READY) {
-    LoginProgress.step(82, 'Menyiapkan modul administrator…', 94);
     try { await loadScript('js/admin.js'); } catch (err) { /* startApp memberi tahu bila gagal */ }
-  } else {
-    LoginProgress.step(86, 'Menyiapkan dashboard ' + boot.me.Role + '…', 94);
-    await new Promise(r => setTimeout(r, 160));
   }
   const nama = String(boot.me.Nama_Lengkap || '').split(',')[0];
   await LoginProgress.finish('Selamat datang, ' + nama);
@@ -206,7 +215,7 @@ function buildNav() {
   ).join('');
 }
 function setActiveNav(name) {
-  const alias = { akun: 'personel' };
+  const alias = { akun: 'personel', 'impor-gadik': 'personel', 'impor-peserta': 'peserta' };
   const n = alias[name] || name;
   $$('#nav a').forEach(a => { const on = a.dataset.nav === n; a.classList.toggle('active', on); if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
   $('#shell').classList.remove('nav-open');

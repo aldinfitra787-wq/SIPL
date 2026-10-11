@@ -36,7 +36,7 @@ const PersonelPage = (() => {
         eyebrow: 'Personel & Penugasan // Administrator Satdik',
         title: 'Personel & Akun Login',
         desc: 'Kelola akun login Gadik (tenaga pendidik), pas foto, reset password, serta penugasan kelas. Menghapus akun Gadik ikut menghapus jadwal mengajar beserta nilai harian mata pelajarannya.',
-        actions: '<button class="btn outline" id="pr-refresh">' + icon('refresh') + 'Segarkan</button><a class="btn primary" href="#/akun/baru">' + icon('user-plus') + 'Tambah Akun</a>'
+        actions: '<button class="btn outline" id="pr-refresh">' + icon('refresh') + 'Segarkan</button><button class="btn outline" id="pr-eks">' + icon('file-sheet') + 'Ekspor Excel</button><button class="btn primary" id="pr-add">' + icon('user-plus') + 'Tambah Gadik</button>'
       }) +
       '<div class="grid c4 keep2" id="pr-stats"></div>' +
       '<div class="card mt-24"><div class="toolbar">' +
@@ -71,6 +71,13 @@ const PersonelPage = (() => {
     $('#pr-q', el).addEventListener('input', debounce(e => { st.q = e.target.value; render(); }, 250));
     $('#pr-kelas', el).onchange = e => { st.kelas = e.target.value; render(); };
     $('#pr-refresh', el).onclick = () => load(true);
+    $('#pr-eks', el).onclick = e => eksporGadik(e.currentTarget);
+    $('#pr-add', el).onclick = () => pilihCaraTambah({
+      judul: 'Tambah Data Gadik', ikon: 'user-plus',
+      manual: 'Isi formulir akun satu per satu (identitas, login, kelas).',
+      impor: 'Banyak Gadik sekaligus dari Excel — template, ekspor & pratinjau.',
+      onManual: () => go('akun/baru'), onImpor: () => go('impor-gadik')
+    });
     $('#pr-table', el).addEventListener('click', e => { if (e.target.closest('[data-retry]')) load(true); });
   }
 

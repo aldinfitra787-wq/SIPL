@@ -950,13 +950,13 @@ div.empty h3 { font-family: var(--display); font-size: 20px; font-weight: 600; }
 /* ==========================================================================
    v1.7 — Progres masuk: layar login diburamkan, logo di tengah cincin emas + persen
    ========================================================================== */
-.login > .login-art, .login > .login-side { transition: filter .6s var(--ease-out), transform .6s var(--ease-out); }
+.login > .login-art, .login > .login-side { transition: filter .3s var(--ease-out), transform .3s var(--ease-out); }
 .login.is-loading > .login-art, .login.is-loading > .login-side { filter: blur(10px) saturate(.85) brightness(.85); transform: scale(1.015); pointer-events: none; }
 .login-progress {
   position: fixed; inset: 0; z-index: 400; display: grid; place-items: center; padding: 24px;
   background: radial-gradient(ellipse at 50% 42%, rgba(92, 20, 20, .38), rgba(40, 8, 8, .72) 70%);
   -webkit-backdrop-filter: blur(16px) saturate(1.1); backdrop-filter: blur(16px) saturate(1.1);
-  opacity: 0; transition: opacity .55s var(--ease-out), -webkit-backdrop-filter .55s, backdrop-filter .55s;
+  opacity: 0; transition: opacity .35s var(--ease-out), -webkit-backdrop-filter .35s, backdrop-filter .35s;
 }
 .login-progress.on { opacity: 1; }
 .login-progress.out { opacity: 0; -webkit-backdrop-filter: blur(0); backdrop-filter: blur(0); }
@@ -964,7 +964,7 @@ div.empty h3 { font-family: var(--display); font-size: 20px; font-weight: 600; }
   width: min(360px, 100%); text-align: center; color: #fff; padding: 34px 30px 24px; border-radius: 20px;
   background: linear-gradient(160deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .05));
   border: 1px solid rgba(243, 191, 69, .35); box-shadow: 0 30px 60px -20px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255, 255, 255, .18);
-  transform: translateY(10px) scale(.97); transition: transform .6s var(--ease-out);
+  transform: translateY(8px) scale(.98); transition: transform .35s var(--ease-out);
 }
 .login-progress.on .lp-card { transform: none; }
 .login-progress.out .lp-card { transform: scale(1.04); }
@@ -990,3 +990,46 @@ div.empty h3 { font-family: var(--display); font-size: 20px; font-weight: 600; }
 .lp-bar span { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, var(--gold-d), var(--gold-l)); box-shadow: 0 0 10px rgba(243, 191, 69, .7); }
 .lp-foot { margin-top: 16px; font: 500 10.5px/1.4 var(--mono); letter-spacing: .12em; color: rgba(255, 255, 255, .5); text-transform: uppercase; }
 @media (max-height: 520px) { .lp-card { padding: 18px 22px 14px; } .lp-emblem { width: 96px; height: 96px; } .lp-logo { inset: 11px; } .lp-pct { font-size: 34px; margin-top: 10px; } .lp-foot { display: none; } }
+
+/* ==========================================================================
+   v1.8 — Import & Ekspor Excel
+   ========================================================================== */
+.cara-pilih { display: grid; gap: 12px; }
+.cara { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; padding: 16px 18px; border: 1px solid var(--border-2); border-radius: 12px; background: #fff; cursor: pointer; transition: border-color .2s, box-shadow .2s, transform .2s var(--ease-out); }
+.cara:hover, .cara:focus-visible { border-color: var(--gold); box-shadow: 0 8px 20px -12px rgba(138, 106, 18, .55); transform: translateY(-1px); }
+.cara > .ico { color: var(--gold-d); }
+.cara-ic { width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center; flex: none; background: var(--surface-2); color: var(--bur); }
+.cara-ic.gold { background: var(--gold-t); color: var(--gold-d); }
+.cara-ic .ico { width: 24px; height: 24px; }
+.cara-t { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.cara-t b { font-family: var(--display); font-size: 18px; font-weight: 600; color: var(--ink); }
+.cara-t small { color: var(--muted); font-size: 13px; line-height: 1.45; }
+.imp-kelas { margin-bottom: 16px; max-width: 520px; }
+.imp-steps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.imp-step { display: flex; gap: 16px; padding: 22px 24px; align-items: flex-start; }
+.imp-step .num-badge { width: 34px; height: 34px; border-radius: 9px; background: var(--gold); color: var(--ink); display: grid; place-items: center; font: 700 13px/1 var(--mono); flex: none; box-shadow: 0 6px 14px -8px rgba(138, 106, 18, .8); }
+.imp-preview td.kls { white-space: nowrap; }
+.imp-step h3 { font-family: var(--display); font-size: 19px; font-weight: 600; margin-bottom: 6px; }
+.imp-acts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.imp-drop { margin-top: 12px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 20px; border: 2px dashed var(--border-2); border-radius: 12px; background: var(--surface-2); cursor: pointer; text-align: center; transition: border-color .2s, background .2s; }
+.imp-drop:hover, .imp-drop.over { border-color: var(--gold); background: var(--gold-t); }
+.imp-drop .drop-ic { width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; background: #fff; color: var(--gold-d); box-shadow: var(--sh-1); margin-bottom: 4px; }
+.imp-drop b { word-break: break-all; }
+.imp-count { display: flex; flex-wrap: wrap; gap: 8px; }
+.imp-count > * { display: inline-flex; align-items: baseline; gap: 5px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); background: #fff; font-size: 12.5px; color: var(--muted); }
+.imp-count b { font: 700 15px/1 var(--display); color: var(--ink); font-variant-numeric: lining-nums tabular-nums; }
+.imp-count button { cursor: pointer; }
+.imp-count button.on { border-color: var(--gold); background: var(--gold-t); }
+.imp-count .ok b { color: var(--green); } .imp-count .gold b { color: var(--gold-d); } .imp-count .red b { color: var(--red); }
+.imp-count button[disabled] { opacity: .55; cursor: default; }
+.imp-preview tr[data-err] td { background: var(--red-t); }
+.imp-preview .tag { font: 600 9.5px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; background: var(--gold-t); color: var(--gold-d); vertical-align: middle; }
+.imp-bar { border-radius: 0 0 var(--r-card) var(--r-card); }
+.red-t { color: var(--red); }
+.badge.gold { background: var(--gold-t); color: var(--gold-d); }
+.imp-done { display: flex; gap: 18px; align-items: flex-start; }
+.imp-done-ic { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: var(--green-t); color: var(--green); flex: none; }
+.imp-done-ic .ico { width: 30px; height: 30px; }
+.imp-done h3 { font-family: var(--display); font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+@media (max-width: 900px) { .imp-steps { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 600px) { .imp-step { padding: 18px; } .imp-step .num-badge { display: none; } .imp-acts .btn { flex: 1 1 100%; } .imp-done { flex-direction: column; } }

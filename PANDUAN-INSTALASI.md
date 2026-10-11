@@ -1,8 +1,14 @@
 # Panduan Instalasi SIPL — SPN Polda Papua Barat
 
-**Sistem Informasi Pelatihan** • Versi 1.7.0
+**Sistem Informasi Pelatihan** • Versi 1.8.0
 
-> **Sudah memasang versi sebelumnya (1.0 – 1.6)?** Langsung ke **Bagian G — Memperbarui Versi**. Data Anda tetap aman dan database diperbarui otomatis.
+> **Sudah memasang versi sebelumnya (1.0 – 1.7)?** Langsung ke **Bagian G — Memperbarui Versi**. Data Anda tetap aman dan database diperbarui otomatis.
+
+### Yang baru di versi 1.8 — Import & Ekspor Excel, login super cepat
+- **Tambah data: Manual atau Import Excel.** Tombol **Tambah Gadik** (Admin, menu Personel & Akun) dan **Tambah Peserta** (Gadik, menu Peserta Pelatihan) kini menawarkan dua pilihan: **Manual** (formulir satu per satu) atau **Import Excel** (banyak data sekaligus). Di halaman Import tersedia tombol **Unduh Template Excel** (lembar rapi berkop, judul kolom berwarna, kolom NRP berformat teks, daftar pilihan kelas/peleton, dan sheet PETUNJUK) serta **Ekspor Excel** (data saat ini, bisa diperbarui lalu diimpor kembali). Lihat **Bagian M**.
+- **Hasil import: HURUF KAPITAL & urut abjad.** Nama dan pangkat dari Excel disimpan dalam huruf kapital dan baris baru ditulis sesuai abjad. Ekspor Excel juga diurutkan sesuai abjad dengan huruf kapital.
+- **Semboyan baru** di halaman login dan layar progres: **MAHIR, TERPUJI, PATUH HUKUM & UNGGUL**.
+- **Login jauh lebih cepat walau data banyak**: server menyimpan data layar pertama setiap pengguna di cache (otomatis diperbarui bila ada perubahan data), server dibangunkan & cache dipanaskan saat halaman login dibuka, modul Admin diunduh lebih dulu, dan progres tidak lagi memakai jeda buatan — persen langsung naik ke 100 % begitu data tiba.
 
 ### Yang baru di versi 1.7 — progres masuk, tanpa Pengasuh, tipografi elegan
 - **Progres persen saat masuk**: setelah tombol *Masuk* ditekan, layar login **diburamkan** dan muncul **logo website** di dalam cincin emas beserta **persentase 0–100 %** dan keterangan tahap (*Menghubungkan ke server → Memverifikasi akun → Memuat data → Selamat datang*). Bila password salah, layar kembali tajam dan pesan kesalahan tampil. Lihat **Bagian L**.
@@ -189,7 +195,7 @@ Tunggu 1–2 menit → muncul **"Your site is live at https://USERNAME.github.io
    1. **Angkatan & Kelas** (mis. *Pelatihan Gelombang I 2026 — Kelas A*).
    2. **Peleton** per kelas.
    3. **Mata Pelajaran**.
-4. **Personel & Akun → Tambah Akun** untuk setiap Gadik, sekaligus pilih kelas yang diampu.
+4. **Personel & Akun → Tambah Gadik** → pilih **Manual** (satu per satu) atau **Import Excel** (banyak sekaligus, Bagian M), sekaligus kelas yang diampu.
 5. **Jadwal Pelajaran → Tambah Jadwal Mapel**, untuk setiap mata pelajaran:
    - pilih **Kelas**, **Mata pelajaran**, **Gadik pengampu**;
    - **Tanggal mulai** (Senin) — tanggal selesai otomatis Sabtu (6 hari); hari pelaksanaan Senin–Sabtu sudah tercentang;
@@ -198,7 +204,7 @@ Tunggu 1–2 menit → muncul **"Your site is live at https://USERNAME.github.io
 
    Mapel berikutnya dijadwalkan di pekan berikutnya. Sistem memperingatkan bila kelas atau Gadik yang sama dijadwalkan pada tanggal & jam yang sama. Jadwal inilah yang menentukan mapel yang muncul di Input Nilai Harian milik Gadik pada tiap tanggal.
 6. Bagikan alamat aplikasi + username/password awal ke masing-masing personel.
-7. Gadik mengisi **Peserta Pelatihan** kelasnya, lalu **Input Nilai Harian** setiap selesai mengajar.
+7. Gadik mengisi **Peserta Pelatihan** kelasnya (Manual atau Import Excel), lalu **Input Nilai Harian** setiap selesai mengajar.
 
 ### Alur Input Nilai Harian (Gadik)
 
@@ -291,7 +297,7 @@ Tunggu 1–2 menit; bila tampilan masih lama tekan **Ctrl + Shift + R**.
 
 ---
 
-## Bagian G — Memperbarui Versi (1.0 – 1.6 → 1.7)
+## Bagian G — Memperbarui Versi (1.0 – 1.7 → 1.8)
 
 Lakukan saat aplikasi sepi (mis. sore hari). Data lama **tidak dihapus**. Langkahnya sama dari versi mana pun.
 
@@ -300,6 +306,7 @@ Lakukan saat aplikasi sepi (mis. sore hari). Data lama **tidak dihapus**. Langka
 2. Berkas **Kode** → hapus seluruh isinya → tempel isi `Kode.gs` versi terbaru. Lakukan hal yang sama untuk **Migrasi** (`Migrasi.gs`). Tekan **Ctrl + S**.
 3. **Terapkan → Kelola deployment → ✏️ Edit → Versi: Versi baru → Terapkan.** (URL `/exec` tetap sama.)
 4. Database diperbarui **otomatis** pada permintaan pertama (mis. saat ada yang login). Pembaruan ini:
+   - (v1.8) tidak ada sheet/kolom baru — import Excel memakai sheet yang sudah ada,
    - (v1.7) tidak membuat sheet baru; sheet lama `Data_Pengasuh` & `Nilai_Mental` tidak dipakai lagi dan **tidak dihapus otomatis** (bersihkan dengan `hapusDataPengasuh` bila diinginkan — Bagian L),
    - membuat sheet **`Dokumen_Jadwal`** dan **`Foto_Akun`**, serta kolom **`Foto_Ver`** di sheet `Users` (v1.6),
    - menambah kolom **`Tanggal_Mulai`**, **`Tanggal_Selesai`**, **`Tutup_Jumat`** di sheet `Jadwal`,
@@ -312,12 +319,12 @@ Lakukan saat aplikasi sepi (mis. sore hari). Data lama **tidak dihapus**. Langka
 
 **2. Frontend**
 1. Simpan dulu nilai `GAS_URL` dari `js/config.js` lama Anda.
-2. Ekstrak `sipl-frontend.zip` versi 1.7, lalu **salin seluruh isinya menimpa** isi folder repository lama Anda (`index.html`, `css`, `js`, `img`, dan berkas `.md`).
+2. Ekstrak `sipl-frontend.zip` versi 1.8, lalu **salin seluruh isinya menimpa** isi folder repository lama Anda (`index.html`, `css`, `js`, `img`, dan berkas `.md`).
 3. Buka `js/config.js` yang baru → isi kembali `GAS_URL` yang tadi disimpan.
 4. Kirim ke GitHub:
    ```bash
    git add .
-   git commit -m "SIPL 1.7 - progres login, tanpa Pengasuh, tipografi elegan"
+   git commit -m "SIPL 1.8 - import & ekspor Excel, login cepat"
    git push
    ```
 5. Tunggu 1–2 menit. Berkas versi baru otomatis dimuat (tidak perlu hapus cache); bila tampilan masih lama, tekan **Ctrl + Shift + R**.
@@ -445,6 +452,35 @@ Ketentuan: format **JPEG/JPG** saja (PNG ditolak). Foto otomatis **dipotong ke r
 
 ---
 
+## Bagian M — Import & Ekspor Excel (v1.8)
+
+**Siapa memakai apa**
+
+| Data | Siapa | Menu |
+|---|---|---|
+| Gadik (akun login + data personel + kelas penugasan) | Admin Satdik | **Personel & Akun → Tambah Gadik → Import Excel** |
+| Peserta pelatihan | Gadik (di kelas penugasannya) | **Peserta Pelatihan → Tambah Peserta → Import Excel** |
+| Ekspor Excel saja | Admin & Gadik | tombol **Ekspor Excel** di halaman Personel / Peserta / Import |
+
+**Langkah import**
+1. Tekan **Tambah Gadik** / **Tambah Peserta** → pilih **Import Excel**.
+2. **Unduh Template Excel**. Berkas berisi kop, judul kolom (kolom bertanda **\*** wajib), 100+ baris kosong bernomor, **daftar pilihan** (dropdown) untuk kolom Kelas/Peleton, dan sheet **PETUNJUK**.
+   Ingin memperbarui data yang sudah ada? Tekan **Ekspor Excel**, ubah isinya, lalu impor kembali.
+3. Isi data di Excel (satu orang per baris), simpan sebagai **.xlsx** (CSV juga bisa).
+4. Unggah berkas (klik kotak unggah atau seret berkasnya). Aplikasi menampilkan **pratinjau** urut abjad dengan status tiap baris: **Baru**, **Diperbarui**, **Sama**, atau **Perbaiki** beserta alasannya.
+5. Bila ada baris *Perbaiki*, betulkan di Excel lalu unggah ulang — **tidak ada data yang disimpan** sampai semua baris benar.
+6. Tekan **Simpan n Data** → konfirmasi. Selesai: data langsung tampil di tabel.
+
+**Aturan**
+- Nama & pangkat disimpan **HURUF KAPITAL**; baris baru ditulis **sesuai abjad**.
+- **Gadik**: dicocokkan lewat **USERNAME** lalu **NRP/NIP**. Bila sudah ada → datanya diperbarui dan kelas penugasan ditambahkan (password tidak diubah). Bila baru → akun dibuat. **Username** dan **password awal** yang dikosongkan dibuat otomatis; setelah import tekan **Unduh Daftar Akun Baru** lalu bagikan ke masing-masing Gadik (password hanya tampil saat itu).
+- Kolom **Kelas Penugasan** diisi dari daftar pilihan; lebih dari satu kelas dipisahkan titik koma ( **;** ).
+- **Peserta**: dicocokkan lewat **NRP** di kelas itu → diperbarui; NRP yang terdaftar di kelas lain ditolak. Peleton dipilih dari daftar peleton kelas.
+- NRP yang terbaca sebagai angka oleh Excel (kehilangan 0 di depan) dipulihkan otomatis menjadi 8 digit. Kolom NRP di template sudah berformat teks agar 0 di depan aman.
+- Maksimal **1.500 baris** sekali import (pecah berkas bila lebih). Berkas `.xls` lama: buka di Excel → *Simpan Sebagai* → `.xlsx`.
+
+---
+
 ## Pemeliharaan (fungsi yang bisa dijalankan dari editor Apps Script)
 
 | Fungsi | Kegunaan |
@@ -466,6 +502,8 @@ Cadangan otomatis tersimpan di folder **Cadangan Harian** (14 salinan terakhir).
 |---|---|---|
 | Login | password salah 5× | pesan umum, lalu akun terkunci 15 menit |
 | Hak akses | login Gadik, buka alamat `#/personel` | dialihkan ke Dashboard |
+| Import | Personel → Tambah Gadik → Import Excel → unggah template yang diisi | pratinjau urut abjad & KAPITAL; baris salah ditandai; setelah simpan Gadik tampil di daftar |
+| Ekspor | Peserta Pelatihan → Ekspor Excel | berkas .xlsx urut abjad, HURUF KAPITAL, NRP tetap 0 di depan |
 | Login | masukkan username & password benar → **Masuk** | layar login buram, logo + persen 0–100 % tampil, lalu dashboard terbuka |
 | Hak akses | login dengan akun Pengasuh lama | ditolak: *Peran Pengasuh sudah tidak digunakan* |
 | Data | Gadik menambah peserta dengan NRP yang sudah ada | ditolak dengan alasan |

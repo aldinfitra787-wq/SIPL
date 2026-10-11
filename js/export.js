@@ -65,7 +65,8 @@
   // ==========================================================================
   // XLSX
   // ==========================================================================
-  const X = { def: 0, title: 1, sub: 2, th: 3, td: 4, tdc: 5, num: 6, numb: 7, label: 8, note: 9, tdb: 10, ttd: 11, ttdNama: 12, kop: 13, kopAkhir: 14 };
+  const X = { def: 0, title: 1, sub: 2, th: 3, td: 4, tdc: 5, num: 6, numb: 7, label: 8, note: 9, tdb: 10, ttd: 11, ttdNama: 12, kop: 13, kopAkhir: 14,
+    thB: 15, tdTxt: 16, tdNo: 17, judulL: 18, wrap: 19, pilih: 20, pilihH: 21 };
   const xesc = function (s) {
     return String(s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
       .replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; });
@@ -76,14 +77,16 @@
 
   const STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-    '<fonts count="5"><font><sz val="11"/><name val="Arial"/><family val="2"/></font><font><b/><sz val="11"/><name val="Arial"/><family val="2"/></font>' +
-    '<font><b/><sz val="14"/><name val="Arial"/><family val="2"/></font><font><i/><sz val="9"/><color rgb="FF555555"/><name val="Arial"/><family val="2"/></font><font><b/><u/><sz val="11"/><name val="Arial"/><family val="2"/></font></fonts>' +
-    '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>' +
-    '<fill><patternFill patternType="solid"><fgColor rgb="FFF3E7C4"/><bgColor indexed="64"/></patternFill></fill></fills>' +
+    '<fonts count="8"><font><sz val="11"/><name val="Arial"/><family val="2"/></font><font><b/><sz val="11"/><name val="Arial"/><family val="2"/></font>' +
+    '<font><b/><sz val="14"/><name val="Arial"/><family val="2"/></font><font><i/><sz val="9"/><color rgb="FF555555"/><name val="Arial"/><family val="2"/></font><font><b/><u/><sz val="11"/><name val="Arial"/><family val="2"/></font>' +
+    '<font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Arial"/><family val="2"/></font><font><b/><sz val="12"/><color rgb="FF5C1414"/><name val="Arial"/><family val="2"/></font><font><sz val="10"/><color rgb="FF444444"/><name val="Arial"/><family val="2"/></font></fonts>' +
+    '<fills count="5"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>' +
+    '<fill><patternFill patternType="solid"><fgColor rgb="FFF3E7C4"/><bgColor indexed="64"/></patternFill></fill>' +
+    '<fill><patternFill patternType="solid"><fgColor rgb="FF5C1414"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFBF5E3"/><bgColor indexed="64"/></patternFill></fill></fills>' +
     '<borders count="3"><border><left/><right/><top/><bottom/><diagonal/></border>' +
     '<border><left style="thin"><color auto="1"/></left><right style="thin"><color auto="1"/></right><top style="thin"><color auto="1"/></top><bottom style="thin"><color auto="1"/></bottom><diagonal/></border><border><left/><right/><top/><bottom style="thin"><color auto="1"/></bottom><diagonal/></border></borders>' +
     '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-    '<cellXfs count="15">' +
+    '<cellXfs count="22">' +
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
     '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
     '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
@@ -99,6 +102,13 @@
     '<xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
     '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
     '<xf numFmtId="0" fontId="1" fillId="0" borderId="2" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
+    '<xf numFmtId="0" fontId="5" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="49" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>' +
+    '<xf numFmtId="0" fontId="7" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
+    '<xf numFmtId="0" fontId="6" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment vertical="center"/></xf>' +
+    '<xf numFmtId="0" fontId="7" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>' +
+    '<xf numFmtId="49" fontId="0" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>' +
+    '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>' +
     '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
 
   function cellXml(c, R) {
@@ -133,6 +143,10 @@
       (sh.cols && sh.cols.length ? '<cols>' + sh.cols.map(function (w, i) { return '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + w + '" customWidth="1"/>'; }).join('') + '</cols>' : '') +
       '<sheetData>' + body + '</sheetData>' +
       (sh.merges && sh.merges.length ? '<mergeCells count="' + sh.merges.length + '">' + sh.merges.map(function (m) { return '<mergeCell ref="' + m + '"/>'; }).join('') + '</mergeCells>' : '') +
+      (sh.validations && sh.validations.length ? '<dataValidations count="' + sh.validations.length + '">' + sh.validations.map(function (v) {
+        return '<dataValidation type="list" allowBlank="1" showInputMessage="1" showErrorMessage="' + (v.strict ? 1 : 0) + '"' + (v.prompt ? ' promptTitle="' + xesc(v.prompt[0]) + '" prompt="' + xesc(v.prompt[1]) + '"' : '') +
+          (v.strict ? ' errorTitle="Pilihan tidak dikenal" error="' + xesc(v.error || 'Pilih dari daftar.') + '"' : '') + ' sqref="' + v.sqref + '"><formula1>' + xesc(v.formula) + '</formula1></dataValidation>';
+      }).join('') + '</dataValidations>' : '') +
       '<printOptions horizontalCentered="1"/><pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/>' +
       '<pageSetup paperSize="9" orientation="' + (sh.landscape ? 'landscape' : 'portrait') + '" fitToWidth="1" fitToHeight="0"/>' +
       '</worksheet>';
@@ -163,7 +177,7 @@
     files.push({
       name: 'docProps/core.xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
         '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">' +
-        '<dc:title>Penilaian PROLAT</dc:title><dc:creator>SIPL</dc:creator>' +
+        '<dc:title>SIPL</dc:title><dc:creator>SIPL</dc:creator>' +
         '<dcterms:created xsi:type="dcterms:W3CDTF">' + now + '</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">' + now + '</dcterms:modified></cp:coreProperties>'
     });
     files.push({
@@ -174,7 +188,7 @@
       name: 'xl/workbook.xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
         '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
         '<bookViews><workbookView activeTab="' + Math.max(0, sheets.findIndex(function (s) { return s.active; })) + '"/></bookViews><sheets>' +
-        names.map(function (n, i) { return '<sheet name="' + xesc(n) + '" sheetId="' + (i + 1) + '" r:id="rId' + (i + 1) + '"/>'; }).join('') +
+        names.map(function (n, i) { return '<sheet name="' + xesc(n) + '" sheetId="' + (i + 1) + '"' + (sheets[i].hidden ? ' state="hidden"' : '') + ' r:id="rId' + (i + 1) + '"/>'; }).join('') +
         '</sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>'
     });
     files.push({
@@ -574,7 +588,151 @@
     setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 4000);
   }
 
+  // ==========================================================================
+  // TEMPLATE & EKSPOR DATA (v1.8) — lembar rapi yang bisa diisi lalu diimpor kembali
+  // ==========================================================================
+  /**
+   * t: { judul, sub, nama (nama sheet), kolom:[{ t, w, text, wajib, contoh, pilihan:[..], ketat }], baris:[[nilai]],
+   *      kosong (jumlah baris kosong siap isi), petunjuk:[teks], daftar:[{ judul, nilai:[..] }] }
+   */
+  function tabelXlsx(t) {
+    const K = t.kolom, last = K.length, rows = [], merges = [], heights = {}, validations = [];
+    kopXlsx(rows, merges);
+    const R0 = KOP, HR = KOP + 4, B0 = HR + 1;
+    rows[R0] = [{ v: t.judul, s: X.title }]; merges.push(ref(0, R0) + ':' + ref(last, R0)); heights[R0] = 24;
+    if (t.sub) { rows[R0 + 1] = [{ v: t.sub, s: X.sub }]; merges.push(ref(0, R0 + 1) + ':' + ref(last, R0 + 1)); }
+    rows[R0 + 2] = [{ v: t.catatan || 'Isi mulai baris ' + (B0 + 1) + '. Kolom bertanda * wajib diisi. Jangan mengubah judul kolom. Petunjuk lengkap ada di sheet PETUNJUK.', s: X.note }];
+    merges.push(ref(0, R0 + 2) + ':' + ref(last, R0 + 2));
+    rows[HR] = [{ v: 'NO', s: X.thB }].concat(K.map(function (k) { return { v: k.t + (k.wajib ? ' *' : ''), s: X.thB }; }));
+    heights[HR] = 30;
+    const data = t.baris || [], n = Math.max(data.length + (t.kosong || 0), data.length ? data.length : 1);
+    for (let i = 0; i < n; i++) {
+      const v = data[i] || [];
+      rows[B0 + i] = [{ v: i + 1, s: X.tdNo }].concat(K.map(function (k, c) {
+        const x = v[c];
+        return { v: x === undefined || x === null ? '' : (k.text ? String(x) : x), s: k.text ? X.tdTxt : X.td };
+      }));
+    }
+    // daftar pilihan (dropdown) di sheet PETUNJUK
+    const daftar = t.daftar || [], P = [], pm = [];
+    P[0] = [{ v: 'PETUNJUK PENGISIAN', s: X.judulL }];
+    let r = 2;
+    (t.petunjuk || []).forEach(function (txt, i) { P[r++] = [{ v: (i + 1) + '. ' + txt, s: X.wrap }]; });
+    r++;
+    P[r++] = [{ v: 'KOLOM', s: X.pilihH }, { v: 'KETERANGAN', s: X.pilihH }];
+    K.forEach(function (k) { P[r++] = [{ v: k.t + (k.wajib ? ' *' : ''), s: X.tdb }, { v: k.ket || '', s: X.td }]; });
+    const dCol = 3;
+    daftar.forEach(function (d, j) {
+      const c = dCol + j;
+      P[2] = P[2] || [];
+      P[2][c] = { v: d.judul, s: X.pilihH };
+      d.nilai.forEach(function (x, i) { P[3 + i] = P[3 + i] || []; P[3 + i][c] = { v: x, s: X.pilih }; });
+      const kc = K.findIndex(function (k) { return k.pilihan === d.id; });
+      if (kc > -1 && d.nilai.length) {
+        const col = colName(c);
+        validations.push({ sqref: ref(kc + 1, B0) + ':' + ref(kc + 1, B0 + Math.max(n, 400) - 1), formula: "'PETUNJUK'!$" + col + '$4:$' + col + '$' + (3 + d.nilai.length), strict: !!d.ketat, prompt: [d.judul, d.prompt || 'Pilih dari daftar.'], error: d.error });
+      }
+    });
+    const pCols = [62, 70, 3].concat(daftar.map(function () { return 40; }));
+    const main = { name: t.nama || 'DATA', cols: [6].concat(K.map(function (k) { return k.w || 18; })), rows: rows, merges: merges, freeze: B0, heights: heights, validations: validations, active: true, landscape: K.length > 5 };
+    return xlsx([main, { name: 'PETUNJUK', cols: pCols, rows: P, merges: pm }]);
+  }
+
+  // ---------- Pembaca .xlsx / .csv (tanpa pustaka luar) ----------
+  async function inflate(bytes) {
+    if (typeof DecompressionStream === 'undefined') throw new Error('Browser ini belum mendukung pembacaan Excel. Gunakan Chrome/Edge/Firefox/Safari terbaru, atau simpan berkas sebagai CSV.');
+    const ds = new DecompressionStream('deflate-raw');
+    const out = new Response(new Blob([bytes]).stream().pipeThrough(ds));
+    return new Uint8Array(await out.arrayBuffer());
+  }
+  async function unzip(buf) {
+    const u = new Uint8Array(buf), dv = new DataView(buf), files = {};
+    let e = -1;
+    for (let i = u.length - 22; i >= Math.max(0, u.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { e = i; break; }
+    if (e < 0) throw new Error('Berkas bukan Excel (.xlsx) yang valid.');
+    const count = dv.getUint16(e + 10, true);
+    let p = dv.getUint32(e + 16, true);
+    const dec = new TextDecoder();
+    for (let k = 0; k < count; k++) {
+      if (dv.getUint32(p, true) !== 0x02014b50) break;
+      const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true), nlen = dv.getUint16(p + 28, true), xlen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+      const name = dec.decode(u.subarray(p + 46, p + 46 + nlen));
+      files[name] = { method: method, csize: csize, off: off };
+      p += 46 + nlen + xlen + clen;
+    }
+    return {
+      names: Object.keys(files),
+      text: async function (name) {
+        const f = files[name];
+        if (!f) return null;
+        const start = f.off + 30 + dv.getUint16(f.off + 26, true) + dv.getUint16(f.off + 28, true);
+        const raw = u.subarray(start, start + f.csize);
+        return dec.decode(f.method === 8 ? await inflate(raw) : raw);
+      }
+    };
+  }
+  function xmlDoc(s) { return new DOMParser().parseFromString(s, 'application/xml'); }
+  function byTag(node, tag) { return Array.from(node.getElementsByTagName(tag)).concat(Array.from(node.getElementsByTagNameNS ? node.getElementsByTagNameNS('*', tag) : [])).filter(function (x, i, a) { return a.indexOf(x) === i; }); }
+  function colIndex(refStr) { const m = /^([A-Z]+)/.exec(refStr || ''); let n = 0; if (!m) return -1; for (const ch of m[1]) n = n * 26 + ch.charCodeAt(0) - 64; return n - 1; }
+  async function bacaXlsx(buf) {
+    const z = await unzip(buf);
+    const ssTxt = await z.text('xl/sharedStrings.xml'), shared = [];
+    if (ssTxt) byTag(xmlDoc(ssTxt), 'si').forEach(function (si) { shared.push(byTag(si, 't').map(function (t) { return t.textContent; }).join('')); });
+    // sheet pertama sesuai urutan workbook
+    let path = 'xl/worksheets/sheet1.xml';
+    try {
+      const wb = xmlDoc(await z.text('xl/workbook.xml')), rels = xmlDoc(await z.text('xl/_rels/workbook.xml.rels'));
+      const first = byTag(wb, 'sheet').filter(function (s) { return s.getAttribute('state') !== 'hidden'; })[0];
+      const rid = first && (first.getAttribute('r:id') || first.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id'));
+      const rel = byTag(rels, 'Relationship').find(function (r) { return r.getAttribute('Id') === rid; });
+      if (rel) { const tg = rel.getAttribute('Target').replace(/^\/?xl\//, ''); path = 'xl/' + tg.replace(/^\//, ''); }
+    } catch (e) { /* pakai sheet1 */ }
+    const sx = await z.text(path) || await z.text(z.names.find(function (n) { return /^xl\/worksheets\/sheet\d+\.xml$/.test(n); }));
+    if (!sx) throw new Error('Sheet data tidak ditemukan di berkas Excel.');
+    const out = [];
+    byTag(xmlDoc(sx), 'row').forEach(function (rowEl) {
+      const r = Number(rowEl.getAttribute('r')) - 1, row = [];
+      byTag(rowEl, 'c').forEach(function (c, ci) {
+        const col = c.getAttribute('r') ? colIndex(c.getAttribute('r')) : ci, t = c.getAttribute('t');
+        const vEl = byTag(c, 'v')[0], v = vEl ? vEl.textContent : '';
+        let val = '';
+        if (t === 's') val = shared[Number(v)] || '';
+        else if (t === 'inlineStr') val = byTag(c, 't').map(function (x) { return x.textContent; }).join('');
+        else if (t === 'str' || t === 'e') val = v;
+        else if (t === 'b') val = v === '1' ? 'TRUE' : 'FALSE';
+        else val = v === '' ? '' : Number(v);
+        row[col] = val;
+      });
+      out[r >= 0 ? r : out.length] = row;
+    });
+    for (let i = 0; i < out.length; i++) if (!out[i]) out[i] = [];
+    return out;
+  }
+  function bacaCsv(text) {
+    text = text.replace(/^﻿/, '');
+    const firstLine = text.split(/\r?\n/)[0] || '', delim = (firstLine.split(';').length > firstLine.split(',').length) ? ';' : (firstLine.indexOf('\t') > -1 ? '\t' : ',');
+    const rows = []; let row = [], cur = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (q) { if (ch === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch; continue; }
+      if (ch === '"') q = true;
+      else if (ch === delim) { row.push(cur); cur = ''; }
+      else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cur); rows.push(row); row = []; cur = ''; }
+      else cur += ch;
+    }
+    if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
+    return rows;
+  }
+  /** Berkas (File) → array baris (sel: string atau number). */
+  async function bacaBerkas(file) {
+    const name = String(file.name || '').toLowerCase();
+    if (/\.xls$/.test(name)) throw new Error('Format .xls (Excel 97–2003) belum didukung. Buka berkas di Excel lalu Simpan Sebagai → Excel Workbook (.xlsx).');
+    if (/\.(csv|txt)$/.test(name)) return bacaCsv(await file.text());
+    return bacaXlsx(await file.arrayBuffer());
+  }
+
   window.Ekspor = {
+    tabelXlsx: tabelXlsx, bacaBerkas: bacaBerkas, _bacaXlsx: bacaXlsx, _bacaCsv: bacaCsv,
     tglPanjang: tglPanjang, hitungAkhir: hitungAkhir,
     /** d: { judul, instansi, info:[[label, nilai]], ringkas, format, peserta:[{nama, pn}], nilai:[[7 butir]] } */
     hariXlsx: function (d) { return xlsx([lembarHari(d, d.sheet || 'HARI')]); },

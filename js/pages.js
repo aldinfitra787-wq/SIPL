@@ -497,7 +497,7 @@ function dashAdmin(el) {
       title: 'Dashboard Administrator',
       desc: 'Pusat kendali data pelatihan, jadwal pelajaran, tenaga pendidik (Gadik), serta rekap penilaian ' + esc(CFG.INSTANSI || 'SPN Polda Papua Barat') + '.',
       chips: roleBadge('Admin'),
-      actions: '<a class="btn outline" href="#/jadwal">' + icon('calendar') + 'Atur Jadwal</a><a class="btn primary" href="#/akun/baru">' + icon('user-plus') + 'Tambah Akun</a>'
+      actions: '<a class="btn outline" href="#/jadwal">' + icon('calendar') + 'Atur Jadwal</a><button type="button" class="btn primary" id="da-add">' + icon('user-plus') + 'Tambah Gadik</button>'
     }) +
     '<div class="grid c4 keep2">' +
       stat({ label: 'Kelas Aktif', value: st.kelasAktif || 0, unit: 'kelas', icon: 'building', cap: (st.kelasTotal || 0) + ' angkatan/kelas pelatihan terdaftar' }) +
@@ -525,6 +525,8 @@ function dashAdmin(el) {
       shortcut('rekap-akhir', 'medal', 'Rekap Akhir', 'NIL AKHIR & peringkat per kelas sesuai format PROLAT, siap diunduh PDF/Excel.') +
       shortcut('master', 'database', 'Master Data', 'Angkatan & kelas pelatihan, peleton, mata pelajaran, dan penugasan personel.') +
     '</div>';
+  const add = el.querySelector('#da-add');
+  if (add) add.onclick = () => pilihCaraTambah({ judul: 'Tambah Data Gadik', ikon: 'user-plus', manual: 'Isi formulir akun satu per satu (identitas, login, kelas).', impor: 'Banyak Gadik sekaligus dari Excel — template, ekspor & pratinjau.', onManual: () => go('akun/baru'), onImpor: () => go('impor-gadik') });
 }
 
 function todaySessions(jadwal) {
@@ -624,7 +626,7 @@ const PesertaPage = (() => {
         desc: S.role === 'Gadik' ? 'Daftar resmi peserta di kelas penugasan Anda. Anda dapat menambah dan memperbarui nama, pangkat, NRP, dan peleton.' :
           'Daftar peserta pelatihan seluruh kelas. Data diinput oleh Gadik di masing-masing kelas; Admin dapat menghapus peserta beserta seluruh nilainya.',
         chips: S.role === 'Admin' ? '<span class="chip line">' + icon('eye', 'sm') + 'Lihat &amp; hapus</span>' : '<span class="chip">' + icon('lock', 'sm') + 'Kelas penugasan' + '</span>',
-        actions: canEdit() ? '<button class="btn primary" id="ps-add">' + icon('user-plus') + 'Tambah Peserta</button>' : ''
+        actions: '<button class="btn outline" id="ps-eks">' + icon('file-sheet') + 'Ekspor Excel</button>' + (canEdit() ? '<button class="btn primary" id="ps-add">' + icon('user-plus') + 'Tambah Peserta</button>' : '')
       }) +
       '<div class="grid c3 keep2" id="ps-stats"></div>' +
       '<div class="card mt-24"><div class="toolbar">' +
@@ -637,7 +639,7 @@ const PesertaPage = (() => {
       columns: columns(),
       empty: () => emptyState('users', 'Belum ada peserta', st.q ? 'Tidak ada peserta yang cocok dengan pencarian.' : 'Belum ada peserta di kelas/peleton ini.', canEdit() && !st.q ? '<button class="btn primary" data-act="add">' + icon('plus') + 'Tambah Peserta</button>' : ''),
       onAction: (act, id) => {
-        if (act === 'add') return openForm();
+        if (act === 'add') return tambah();
         if (act === 'edit' && canEdit()) return openForm(R().peserta[id]);
         if (act === 'del') return remove(R().peserta[id]);
       }
@@ -646,7 +648,8 @@ const PesertaPage = (() => {
     $('#ps-pel', el).addEventListener('change', e => { st.pel = e.target.value; refresh(); });
     $('#ps-q', el).addEventListener('input', debounce(e => { st.q = e.target.value; refresh(); }, 250));
     const add = $('#ps-add', el);
-    if (add) add.onclick = () => openForm();
+    if (add) add.onclick = () => tambah();
+    $('#ps-eks', el).onclick = e => eksporPeserta(S.role === 'Admin' ? st.kelas : (st.kelas || (myKelas()[0] || {}).ID_Kelas), e.currentTarget);
   }
 
   function columns() {
@@ -692,6 +695,16 @@ const PesertaPage = (() => {
       stat({ label: 'Peleton', value: pels.length, unit: 'peleton', icon: 'layers', cap: pels.map(p => esc(p.Nama_Peleton) + ' (' + scope.filter(x => x.ID_Peleton === p.ID_Peleton).length + ')').join(' • ') || '—' }) +
       stat({ label: 'Hasil Filter', value: rows.length, unit: 'peserta', icon: 'filter', cap: st.q ? 'Kata kunci: “' + esc(st.q) + '”' : 'Gunakan pencarian nama atau NRP' });
     table.set(rows, keepPage);
+  }
+
+  function tambah() {
+    if (!myKelas().length) { toast('Belum ada kelas', 'Akun Anda belum ditugaskan ke kelas. Hubungi Admin Satdik.', 'warning'); return; }
+    pilihCaraTambah({
+      judul: 'Tambah Peserta Pelatihan', ikon: 'user-plus',
+      manual: 'Isi formulir satu peserta (NRP, nama, pangkat, peleton).',
+      impor: 'Banyak peserta sekaligus dari Excel — template, ekspor & pratinjau.',
+      onManual: () => openForm(), onImpor: () => go('impor-peserta/' + encodeURIComponent(st.kelas || myKelas()[0].ID_Kelas))
+    });
   }
 
   function openForm(p) {
@@ -1690,3 +1703,433 @@ async function kecilkanLogo(f) {
     return best;
   } finally { URL.revokeObjectURL(url); }
 }
+
+// ==========================================================================
+// IMPORT & EKSPOR EXCEL (v1.8) — Gadik (Admin) & Peserta (Gadik)
+// Template rapi → isi di Excel → unggah → pratinjau & periksa → simpan sekaligus.
+// Nama & pangkat disimpan HURUF KAPITAL, urut abjad.
+// ==========================================================================
+const kunciTeks = s => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const kapital = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim().toUpperCase();
+/** Sel NRP/HP: angka dari Excel kehilangan 0 di depan → pulihkan (NRP 8 digit, HP 08…). */
+function teksSel(v, jenis) {
+  if (typeof v === 'number' && isFinite(v)) {
+    let s = String(Math.round(v));
+    if (jenis === 'nrp') while (s.length < 8) s = '0' + s;
+    if (jenis === 'hp' && s.indexOf('8') === 0) s = '0' + s;
+    return s;
+  }
+  return String(v == null ? '' : v).trim();
+}
+function kelasLabel(k) { return k.Nama_Kelas + ' - ' + k.Nama_Angkatan; }
+function cariKelas(txt) {
+  const key = kunciTeks(txt);
+  if (!key) return null;
+  const all = S.boot.ref.kelas;
+  const hit = all.find(k => kunciTeks(k.ID_Kelas) === key || kunciTeks(kelasLabel(k)) === key || kunciTeks(k.Nama_Kelas + ' ' + k.Nama_Angkatan) === key);
+  if (hit) return hit.ID_Kelas;
+  const byName = all.filter(k => kunciTeks(k.Nama_Kelas) === key);
+  return byName.length === 1 ? byName[0].ID_Kelas : null;
+}
+function cariPeleton(txt, idKelas) {
+  const key = kunciTeks(txt);
+  if (!key) return '';
+  const p = pelOf(idKelas).find(x => kunciTeks(x.Nama_Peleton) === key || kunciTeks(x.ID_Peleton) === key || kunciTeks(x.Nama_Peleton).replace(/^peleton/, '') === key.replace(/^peleton|^ton/, ''));
+  return p ? p.ID_Peleton : null;
+}
+function acakPassword() {
+  const ch = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789', a = new Uint32Array(10);
+  (window.crypto || {}).getRandomValues ? crypto.getRandomValues(a) : a.forEach((_, i) => { a[i] = Math.floor(Math.random() * 1e9); });
+  return Array.from(a, x => ch[x % ch.length]).join('');
+}
+function buatUsername(nama, pangkat, dipakai) {
+  const buang = new Set(kapital(pangkat).toLowerCase().split(/[\s.]+/).filter(Boolean));
+  const kata = String(nama).split(',')[0].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z\s]/g, ' ').split(/\s+/)
+    .filter(w => w.length > 1 && !buang.has(w) && !/^(dr|ir|drs|hj|h|tk|i|ii|iii|iv)$/.test(w));
+  let base = (kata.slice(0, 2).join('.') || 'gadik').slice(0, 26), u = base, n = 2;
+  while (dipakai.has(u)) u = base + n++;
+  dipakai.add(u);
+  return u;
+}
+
+const IMPOR = {
+  gadik: {
+    judul: 'Import Data Gadik', roles: ['Admin'], kembali: 'personel', ikon: 'id-card', unit: 'gadik',
+    kolom: [
+      { key: 'Nama_Lengkap', t: 'NAMA LENGKAP & GELAR', w: 40, wajib: true, alias: ['nama', 'namalengkap', 'namagadik', 'namapersonel'], ket: 'Nama lengkap beserta gelar. Disimpan dalam HURUF KAPITAL.' },
+      { key: 'Pangkat', t: 'PANGKAT', w: 16, wajib: true, alias: ['pangkat', 'golongan', 'pangkatgolongan'], ket: 'Contoh: IPTU, AKP, PENATA TK. I.' },
+      { key: 'NRP', t: 'NRP / NIP', w: 18, wajib: true, text: true, alias: ['nrp', 'nip', 'nrpnip'], ket: 'Angka/huruf tanpa spasi (4–25 karakter). Unik untuk setiap Gadik.' },
+      { key: 'Kontak', t: 'NO. HP / WA', w: 18, text: true, alias: ['nohp', 'hp', 'wa', 'nohpwa', 'kontak', 'telepon', 'nowa', 'whatsapp'], ket: 'Opsional.' },
+      { key: 'Username', t: 'USERNAME', w: 22, text: true, alias: ['username', 'user', 'namapengguna'], ket: 'Huruf kecil/angka/titik. Kosongkan agar dibuat otomatis dari nama.' },
+      { key: 'Password', t: 'PASSWORD AWAL', w: 18, text: true, alias: ['password', 'passwordawal', 'katasandi', 'sandi'], ket: 'Minimal 8 karakter. Kosongkan agar dibuat otomatis. Diabaikan untuk akun yang sudah ada.' },
+      { key: 'Kelas', t: 'KELAS PENUGASAN', w: 44, pilihan: 'kelas', alias: ['kelas', 'kelaspenugasan', 'penugasan', 'penugasankelas'], ket: 'Pilih dari daftar. Lebih dari satu kelas: pisahkan dengan titik koma ( ; ).' }
+    ]
+  },
+  peserta: {
+    judul: 'Import Peserta Pelatihan', roles: ['Gadik'], kembali: 'peserta', ikon: 'users', unit: 'peserta',
+    kolom: [
+      { key: 'Nama_Lengkap', t: 'NAMA LENGKAP', w: 40, wajib: true, alias: ['nama', 'namalengkap', 'namapeserta', 'namasiswa'], ket: 'Nama lengkap peserta. Disimpan dalam HURUF KAPITAL.' },
+      { key: 'Pangkat', t: 'PANGKAT', w: 16, alias: ['pangkat', 'golongan'], ket: 'Contoh: BRIPDA.' },
+      { key: 'NRP', t: 'NRP', w: 18, wajib: true, text: true, alias: ['nrp', 'nrpsiswa', 'nosis', 'nomorpokok', 'nip'], ket: 'Angka/huruf tanpa spasi (4–25 karakter). Unik untuk setiap peserta.' },
+      { key: 'Peleton', t: 'PELETON', w: 20, wajib: true, pilihan: 'pel', alias: ['peleton', 'ton', 'namapeleton'], ket: 'Pilih dari daftar peleton kelas ini.' }
+    ]
+  }
+};
+
+function tanggalBerkas() { return todayStr(); }
+async function unduhTabel(spec, nama, btn) {
+  const done = busy(btn, 'Menyiapkan…');
+  try {
+    await muatEkspor();
+    window.Ekspor.simpan(window.Ekspor.tabelXlsx(spec), nama);
+    toast('Berkas Excel siap', nama, 'success');
+  } catch (e) {
+    console.error(e);
+    toast('Berkas gagal dibuat', e && e.message ? e.message : 'Coba lagi.', 'error');
+  } finally { done(); }
+}
+function petunjukImpor(jenis) {
+  const umum = ['Isi satu ' + (jenis === 'gadik' ? 'Gadik' : 'peserta') + ' per baris mulai baris pertama di bawah judul kolom. Kolom NO boleh dibiarkan.',
+    'Kolom bertanda * wajib diisi. Jangan mengubah atau menghapus baris judul kolom.',
+    'Nama dan pangkat otomatis disimpan dalam HURUF KAPITAL dan diurutkan sesuai abjad.',
+    'Bila NRP' + (jenis === 'gadik' ? ' atau username' : '') + ' sudah terdaftar, datanya DIPERBARUI (tidak dibuat ganda).',
+    'Simpan sebagai .xlsx lalu unggah di menu Import Excel. Aplikasi menampilkan pratinjau & memeriksa setiap baris sebelum disimpan.'];
+  if (jenis === 'gadik') umum.splice(3, 0, 'Username & password awal yang dikosongkan dibuat otomatis. Setelah import, unduh daftar akun baru untuk dibagikan.');
+  return umum;
+}
+function specImpor(jenis, o) {
+  const D = IMPOR[jenis];
+  const daftar = jenis === 'gadik'
+    ? [{ id: 'kelas', judul: 'DAFTAR KELAS', nilai: kelasList().map(kelasLabel), prompt: 'Pilih kelas. Lebih dari satu kelas pisahkan dengan ;' }]
+    : [{ id: 'pel', judul: 'DAFTAR PELETON', nilai: pelOf(o.kelas).map(p => p.Nama_Peleton), ketat: true, prompt: 'Pilih peleton peserta.', error: 'Pilih peleton dari daftar.' }];
+  return {
+    judul: o.judul, sub: o.sub, nama: jenis === 'gadik' ? 'DATA GADIK' : 'DATA PESERTA',
+    kolom: D.kolom.map(k => ({ t: k.t, w: k.w, wajib: k.wajib, text: k.text, pilihan: k.pilihan, ket: k.ket })),
+    baris: o.baris || [], kosong: o.kosong || 0, petunjuk: petunjukImpor(jenis), daftar
+  };
+}
+function barisGadik() {
+  const users = (usersData() || []).filter(u => u.Role === 'Gadik');
+  return users.slice().sort((a, b) => collator.compare(kapital(a.Nama_Lengkap), kapital(b.Nama_Lengkap)))
+    .map(u => [kapital(u.Nama_Lengkap), kapital(u.Pangkat), u.NRP, u.Kontak || '', u.Username, '', u.penugasan.map(a => R().kelas[a.ID_Kelas] ? kelasLabel(R().kelas[a.ID_Kelas]) : '').filter(Boolean).join('; ')]);
+}
+function barisPeserta(idKelas) {
+  return S.boot.peserta.filter(p => !idKelas || p.ID_Kelas === idKelas)
+    .slice().sort((a, b) => collator.compare(kapital(a.Nama_Lengkap), kapital(b.Nama_Lengkap)) || collator.compare(String(a.NRP), String(b.NRP)))
+    .map(p => [kapital(p.Nama_Lengkap), kapital(p.Pangkat), p.NRP, p.ID_Peleton ? pelName(p.ID_Peleton) : '']);
+}
+function templateGadik(btn) {
+  unduhTabel(specImpor('gadik', { judul: 'TEMPLATE IMPORT DATA GADIK', sub: String(CFG.INSTANSI || 'SPN POLDA PAPUA BARAT').toUpperCase(), kosong: 100 }), 'TEMPLATE-IMPORT-GADIK.xlsx', btn);
+}
+async function eksporGadik(btn) {
+  if (!usersData()) { const stop = busy(btn, 'Memuat…'); await new Promise(r => loadUsers(r, true)); stop(); }
+  const baris = barisGadik();
+  unduhTabel(specImpor('gadik', { judul: 'DATA GADIK (TENAGA PENDIDIK)', sub: String(CFG.INSTANSI || 'SPN POLDA PAPUA BARAT').toUpperCase() + ' • ' + baris.length + ' GADIK • ' + fmt.tgl(todayStr()).toUpperCase(), baris, kosong: 20 }),
+    namaBerkas(['DATA-GADIK', tanggalBerkas()], 'xlsx'), btn);
+}
+function templatePeserta(idKelas, btn) {
+  unduhTabel(specImpor('peserta', { kelas: idKelas, judul: 'TEMPLATE IMPORT PESERTA PELATIHAN', sub: kapital(kelasName(idKelas, true)), kosong: 150 }), namaBerkas(['TEMPLATE-IMPORT-PESERTA', kelasName(idKelas)], 'xlsx'), btn);
+}
+function eksporPeserta(idKelas, btn) {
+  if (!idKelas) {                               // Admin: semua kelas → satu lembar dengan kolom KELAS
+    const list = urutNama(S.boot.peserta.map(p => Object.assign({}, p, { Nama_Lengkap: kapital(p.Nama_Lengkap) })));
+    return unduhTabel({ judul: 'DATA PESERTA PELATIHAN — SEMUA KELAS', sub: String(CFG.INSTANSI || '').toUpperCase() + ' • ' + list.length + ' PESERTA', nama: 'DATA PESERTA',
+      kolom: [{ t: 'NAMA LENGKAP', w: 40 }, { t: 'PANGKAT', w: 16 }, { t: 'NRP', w: 18, text: true }, { t: 'KELAS', w: 40 }, { t: 'PELETON', w: 18 }],
+      baris: list.map(p => [p.Nama_Lengkap, kapital(p.Pangkat), p.NRP, R().kelas[p.ID_Kelas] ? kelasLabel(R().kelas[p.ID_Kelas]) : '', p.ID_Peleton ? pelName(p.ID_Peleton) : '']),
+      petunjuk: ['Data peserta seluruh kelas, urut abjad. Untuk import, gunakan template per kelas dari menu Peserta Pelatihan (akun Gadik).'] },
+    namaBerkas(['DATA-PESERTA-SEMUA-KELAS', tanggalBerkas()], 'xlsx'), btn);
+  }
+  const baris = barisPeserta(idKelas);
+  unduhTabel(specImpor('peserta', { kelas: idKelas, judul: 'DATA PESERTA PELATIHAN', sub: kapital(kelasName(idKelas, true)) + ' • ' + baris.length + ' PESERTA', baris, kosong: 30 }),
+    namaBerkas(['DATA-PESERTA', kelasName(idKelas), tanggalBerkas()], 'xlsx'), btn);
+}
+
+/** Pilihan cara menambah data: Manual atau Import Excel. */
+function pilihCaraTambah(o) {
+  const m = openModal({
+    title: o.judul, icon: o.ikon || 'plus', sub: 'Pilih cara memasukkan data', size: 'narrow',
+    body: '<div class="cara-pilih">' +
+      '<button type="button" class="cara" data-cara="manual"><span class="cara-ic">' + icon('edit') + '</span><span class="cara-t"><b>Manual</b><small>' + esc(o.manual) + '</small></span>' + icon('arrow-right', 'sm') + '</button>' +
+      '<button type="button" class="cara" data-cara="impor"><span class="cara-ic gold">' + icon('file-sheet') + '</span><span class="cara-t"><b>Import Excel</b><small>' + esc(o.impor) + '</small></span>' + icon('arrow-right', 'sm') + '</button>' +
+      '</div><p class="small muted mt-16">' + icon('info', 'sm') + ' Template Excel & ekspor data tersedia di halaman Import Excel.</p>'
+  });
+  m.el.addEventListener('click', e => {
+    const b = e.target.closest('[data-cara]');
+    if (!b) return;
+    m.close();
+    (b.dataset.cara === 'manual' ? o.onManual : o.onImpor)();
+  });
+}
+
+function ImportPage(jenis) {
+  const D = IMPOR[jenis];
+  const st = { kelas: '', nama: '', items: null, hasil: null, err: '', filter: '' };
+  let el, table;
+
+  function kelasOpsi() { return kelasList(); }
+  function judulKelas() { return st.kelas ? kelasName(st.kelas, true) : ''; }
+
+  function build(root, param) {
+    el = root;
+    if (jenis === 'peserta') {
+      const kel = kelasOpsi();
+      st.kelas = kel.some(k => k.ID_Kelas === param) ? param : (kel.some(k => k.ID_Kelas === st.kelas) ? st.kelas : (kel[0] ? kel[0].ID_Kelas : ''));
+    }
+    el.innerHTML =
+      '<a href="#/' + D.kembali + '" class="btn ghost" style="margin:-6px 0 12px -10px">' + icon('arrow-left', 'sm') + 'Kembali ke ' + (jenis === 'gadik' ? 'Personel & Akun' : 'Peserta Pelatihan') + '</a>' +
+      pageHead({
+        eyebrow: 'Import Excel // ' + (jenis === 'gadik' ? 'Data Gadik (Tenaga Pendidik)' : 'Peserta Pelatihan'),
+        title: D.judul,
+        desc: 'Masukkan banyak data sekaligus dari Excel: unduh template, isi, lalu unggah. Setiap baris diperiksa sebelum disimpan. Nama &amp; pangkat disimpan <b>HURUF KAPITAL</b> dan diurutkan <b>sesuai abjad</b>.',
+        chips: '<span class="chip">' + icon('file-sheet', 'sm') + '.xlsx / .csv</span><span class="chip line">Maks. 1.500 baris</span>'
+      }) +
+      (jenis === 'peserta' ? '<div class="card pad imp-kelas"><div class="field"><label for="im-kelas">Kelas tujuan import</label><select id="im-kelas" class="select">' + options(kelasOpsi(), 'ID_Kelas', k => k.Nama_Kelas + ' — ' + k.Nama_Angkatan, st.kelas, kelasOpsi().length ? null : 'Belum ada kelas') + '</select></div></div>' : '') +
+      '<div class="imp-steps">' +
+        '<div class="card imp-step"><div class="num-badge">01</div><div class="grow"><h3>Siapkan berkas Excel</h3><p class="muted small">Unduh template kosong yang sudah rapi (dengan daftar pilihan), atau ekspor data yang ada untuk diperbarui lalu diimpor kembali.</p>' +
+          '<div class="imp-acts"><button type="button" class="btn primary" id="im-tpl">' + icon('download') + 'Unduh Template Excel</button><button type="button" class="btn outline" id="im-eks">' + icon('file-sheet') + 'Ekspor Excel</button></div></div></div>' +
+        '<div class="card imp-step"><div class="num-badge">02</div><div class="grow"><h3>Unggah berkas yang sudah diisi</h3>' +
+          '<label class="drop imp-drop" id="im-drop"><input type="file" id="im-file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden>' +
+          '<span class="drop-ic">' + icon('upload') + '</span><b id="im-fname">Pilih berkas atau seret ke sini</b><small class="muted">Excel (.xlsx) atau CSV</small></label></div></div>' +
+      '</div>' +
+      '<div id="im-hasil" class="mt-24"></div>';
+    const ks = $('#im-kelas', el);
+    if (ks) ks.onchange = e => { st.kelas = e.target.value; history.replaceState(null, '', '#/impor-peserta/' + encodeURIComponent(st.kelas)); if (st.items) periksaUlang(); };
+    $('#im-tpl', el).onclick = e => { if (jenis === 'gadik') templateGadik(e.currentTarget); else if (cekKelas()) templatePeserta(st.kelas, e.currentTarget); };
+    $('#im-eks', el).onclick = e => { if (jenis === 'gadik') eksporGadik(e.currentTarget); else if (cekKelas()) eksporPeserta(st.kelas, e.currentTarget); };
+    const inp = $('#im-file', el), drop = $('#im-drop', el);
+    inp.onchange = () => { if (inp.files[0]) baca(inp.files[0]); inp.value = ''; };
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+    drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); const f = e.dataTransfer && e.dataTransfer.files[0]; if (f) baca(f); });
+    $('#im-hasil', el).addEventListener('click', e => {
+      if (e.target.closest('#im-simpan')) return simpan(e.target.closest('#im-simpan'));
+      if (e.target.closest('#im-batal')) { st.items = null; st.hasil = null; st.nama = ''; $('#im-fname', el).textContent = 'Pilih berkas atau seret ke sini'; return render(); }
+      if (e.target.closest('#im-akun')) return unduhAkunBaru(e.target.closest('#im-akun'));
+      const f = e.target.closest('[data-filter]'); if (f) { st.filter = f.dataset.filter; return render(); }
+    });
+    render();
+    if (jenis === 'gadik' && !usersData()) loadUsers(() => { if (st.items) periksaUlang(); });
+  }
+  function cekKelas() { if (!st.kelas) { toast('Belum ada kelas', 'Akun Anda belum ditugaskan ke kelas.', 'warning'); return false; } return true; }
+
+  async function baca(file) {
+    if (jenis === 'peserta' && !cekKelas()) return;
+    st.nama = file.name; st.hasil = null; st.err = '';
+    $('#im-fname', el).textContent = file.name;
+    $('#im-hasil', el).innerHTML = '<div class="card pad"><p class="hp-load"><span class="spin"></span>Membaca ' + esc(file.name) + '…</p></div>';
+    try {
+      if (file.size > 8 * 1024 * 1024) throw new Error('Berkas terlalu besar (maks. 8 MB).');
+      await muatEkspor();
+      const rows = await window.Ekspor.bacaBerkas(file);
+      st.raw = petakan(rows);
+      periksaUlang();
+    } catch (e) {
+      st.items = null; st.err = e && e.message ? e.message : 'Berkas tidak dapat dibaca.';
+      render();
+    }
+  }
+
+  /** Cari baris judul kolom lalu petakan setiap kolom ke field. */
+  function petakan(rows) {
+    const cocok = (h, k) => { const x = kunciTeks(String(h).replace(/\*/g, '')); return x && (x === kunciTeks(k.t) || k.alias.indexOf(x) > -1); };
+    let hr = -1, map = null;
+    for (let r = 0; r < Math.min(rows.length, 40); r++) {
+      const row = rows[r] || [], m = {};
+      D.kolom.forEach(k => { const c = row.findIndex(h => h !== undefined && h !== '' && cocok(h, k)); if (c > -1) m[k.key] = c; });
+      if (m.Nama_Lengkap !== undefined && m.NRP !== undefined) { hr = r; map = m; break; }
+    }
+    if (hr < 0) throw new Error('Judul kolom tidak ditemukan. Pastikan ada kolom "' + D.kolom[0].t + '" dan "' + D.kolom[2].t + '" — gunakan Template Excel dari halaman ini.');
+    const out = [];
+    for (let r = hr + 1; r < rows.length; r++) {
+      const row = rows[r] || [], o = { _row: r + 1 };
+      let isi = false;
+      D.kolom.forEach(k => {
+        const c = map[k.key], v = c === undefined ? '' : row[c];
+        o[k.key] = k.key === 'NRP' ? teksSel(v, 'nrp') : k.key === 'Kontak' ? teksSel(v, 'hp') : teksSel(v);
+        if (o[k.key] !== '') isi = true;
+      });
+      if (isi) out.push(o);
+    }
+    if (!out.length) throw new Error('Tidak ada baris data di bawah judul kolom.');
+    if (out.length > 1500) throw new Error('Berkas berisi ' + out.length + ' baris. Maksimal 1.500 baris sekali import — pecah menjadi beberapa berkas.');
+    return { kolom: map, baris: out };
+  }
+
+  function periksaUlang() {
+    st.items = (jenis === 'gadik' ? periksaGadik : periksaPeserta)(st.raw.baris.map(o => Object.assign({}, o)));
+    st.hasil = null; st.filter = '';
+    render();
+  }
+
+  function periksaGadik(list) {
+    const users = (usersData() || []), byU = {}, byN = {}, dipakai = new Set(users.map(u => String(u.Username).toLowerCase()));
+    users.forEach(u => { byU[String(u.Username).toLowerCase()] = u; if (u.Role === 'Gadik' && u.NRP) byN[String(u.NRP).toUpperCase()] = u; });
+    const seenU = {}, seenN = {};
+    list.forEach(it => {
+      const e = [];
+      it.Nama_Lengkap = kapital(it.Nama_Lengkap); it.Pangkat = kapital(it.Pangkat); it.NRP = it.NRP.replace(/\s+/g, '');
+      if (!it.Nama_Lengkap) e.push('Nama wajib diisi.');
+      if (!it.Pangkat) e.push('Pangkat wajib diisi.');
+      if (!/^[A-Za-z0-9.\-\/]{4,25}$/.test(it.NRP)) e.push('NRP/NIP wajib 4–25 karakter.');
+      it.Username = String(it.Username || '').toLowerCase().replace(/\s+/g, '');
+      let ada = (it.Username && byU[it.Username]) || byN[it.NRP.toUpperCase()] || null;
+      if (ada && ada.Role !== 'Gadik') { e.push('Username dipakai akun ' + ada.Role + '.'); ada = null; }
+      if (!it.Username) { if (ada) it.Username = ada.Username; else if (it.Nama_Lengkap) { it.Username = buatUsername(it.Nama_Lengkap, it.Pangkat, dipakai); it._uAuto = true; } }
+      if (it.Username && !/^[a-z0-9._]{3,30}$/.test(it.Username)) e.push('Username 3–30 karakter: huruf kecil, angka, titik, garis bawah.');
+      if (ada && byN[it.NRP.toUpperCase()] && byN[it.NRP.toUpperCase()].ID_User !== ada.ID_User) e.push('NRP sudah dipakai Gadik lain.');
+      if (ada && it.Username !== String(ada.Username).toLowerCase() && byU[it.Username]) e.push('Username sudah dipakai akun lain.');
+      if (!ada) {
+        if (!it.Password) { it.Password = acakPassword(); it._pAuto = true; }
+        else if (String(it.Password).length < 8) e.push('Password awal minimal 8 karakter.');
+      } else it.Password = '';
+      const ks = String(it.Kelas || '').split(/[;\n]+/).map(s => s.trim()).filter(Boolean);
+      it._kelas = [];
+      ks.forEach(k => { const id = cariKelas(k); if (id) { if (it._kelas.indexOf(id) < 0) it._kelas.push(id); } else e.push('Kelas "' + k + '" tidak dikenal.'); });
+      if (it.Username) { if (seenU[it.Username]) e.push('Username ganda (baris ' + seenU[it.Username] + ').'); else seenU[it.Username] = it._row; }
+      if (it.NRP) { const n = it.NRP.toUpperCase(); if (seenN[n]) e.push('NRP ganda (baris ' + seenN[n] + ').'); else seenN[n] = it._row; }
+      it._ada = ada;
+      if (e.length) { it._st = 'err'; it._msg = e.join(' '); return; }
+      if (!ada) { it._st = 'baru'; it._msg = it._uAuto || it._pAuto ? 'Akun baru' + (it._uAuto ? ' • username otomatis' : '') + (it._pAuto ? ' • password otomatis' : '') : 'Akun baru'; return; }
+      const beda = kapital(ada.Nama_Lengkap) !== it.Nama_Lengkap || kapital(ada.Pangkat) !== it.Pangkat || ada.NRP !== it.NRP || (it.Kontak && ada.Kontak !== it.Kontak) || String(ada.Username).toLowerCase() !== it.Username ||
+        it._kelas.some(k => !ada.penugasan.some(a => a.ID_Kelas === k));
+      it._st = beda ? 'ubah' : 'sama'; it._msg = beda ? 'Diperbarui (@' + ada.Username + ')' : 'Sudah sama';
+    });
+    return list.sort((a, b) => collator.compare(a.Nama_Lengkap, b.Nama_Lengkap));
+  }
+
+  function periksaPeserta(list) {
+    const mine = S.boot.peserta.filter(p => p.ID_Kelas === st.kelas), byN = {}, lain = {};
+    mine.forEach(p => { byN[String(p.NRP).toUpperCase()] = p; });
+    S.boot.peserta.forEach(p => { if (p.ID_Kelas !== st.kelas) lain[String(p.NRP).toUpperCase()] = p; });
+    const adaPel = pelOf(st.kelas).length > 0, seen = {};
+    list.forEach(it => {
+      const e = [];
+      it.Nama_Lengkap = kapital(it.Nama_Lengkap); it.Pangkat = kapital(it.Pangkat); it.NRP = it.NRP.replace(/\s+/g, '');
+      if (!it.Nama_Lengkap) e.push('Nama wajib diisi.');
+      if (!/^[A-Za-z0-9.\-\/]{4,25}$/.test(it.NRP)) e.push('NRP wajib 4–25 karakter (angka/huruf/titik/strip).');
+      const n = it.NRP.toUpperCase();
+      if (lain[n]) e.push('NRP sudah terdaftar di ' + kelasName(lain[n].ID_Kelas) + '.');
+      it.ID_Peleton = cariPeleton(it.Peleton, st.kelas);
+      if (it.ID_Peleton === null) e.push('Peleton "' + it.Peleton + '" tidak ada di kelas ini.');
+      else if (adaPel && !it.ID_Peleton) e.push('Peleton wajib diisi.');
+      if (n) { if (seen[n]) e.push('NRP ganda (baris ' + seen[n] + ').'); else seen[n] = it._row; }
+      const ada = byN[n];
+      if (e.length) { it._st = 'err'; it._msg = e.join(' '); return; }
+      if (!ada) { it._st = 'baru'; it._msg = 'Peserta baru'; return; }
+      const beda = kapital(ada.Nama_Lengkap) !== it.Nama_Lengkap || kapital(ada.Pangkat) !== it.Pangkat || (ada.ID_Peleton || '') !== (it.ID_Peleton || '') || ada.NRP !== it.NRP;
+      it._st = beda ? 'ubah' : 'sama'; it._msg = beda ? 'Diperbarui' : 'Sudah sama';
+    });
+    return list.sort((a, b) => collator.compare(a.Nama_Lengkap, b.Nama_Lengkap) || collator.compare(a.NRP, b.NRP));
+  }
+
+  function hitung() {
+    const c = { total: 0, baru: 0, ubah: 0, sama: 0, err: 0 };
+    (st.items || []).forEach(it => { c.total++; c[it._st]++; });
+    return c;
+  }
+
+  function render() {
+    const host = $('#im-hasil', el);
+    if (st.err) { host.innerHTML = '<div class="alert red">' + icon('alert-triangle') + '<div><b>Berkas tidak dapat diproses.</b> ' + esc(st.err) + '</div></div>'; return; }
+    if (st.hasil) return renderHasil(host);
+    if (!st.items) { host.innerHTML = ''; return; }
+    const c = hitung(), siap = c.baru + c.ubah;
+    const list = st.filter === 'err' ? st.items.filter(i => i._st === 'err') : st.items;
+    host.innerHTML =
+      '<div class="card imp-preview"><div class="card-head"><div class="icon-tile">' + icon('clipboard-check') + '</div><div class="grow"><h3>Pratinjau &amp; Pemeriksaan</h3><div class="sub">' + esc(st.nama) + (jenis === 'peserta' ? ' → ' + esc(judulKelas()) : '') + ' • urut abjad, HURUF KAPITAL</div></div>' +
+        '<div class="imp-count">' +
+          '<button type="button" data-filter="" class="' + (st.filter ? '' : 'on') + '"><b>' + c.total + '</b>baris</button>' +
+          '<span class="ok"><b>' + c.baru + '</b>baru</span><span class="gold"><b>' + c.ubah + '</b>diperbarui</span>' + (c.sama ? '<span><b>' + c.sama + '</b>sama</span>' : '') +
+          '<button type="button" data-filter="err" class="red' + (st.filter === 'err' ? ' on' : '') + '"' + (c.err ? '' : ' disabled') + '><b>' + c.err + '</b>perlu diperbaiki</button></div></div>' +
+        (c.err ? '<div class="alert red" style="margin:16px 24px 0">' + icon('alert-triangle') + '<div><b>' + c.err + ' baris perlu diperbaiki.</b> Perbaiki di Excel lalu unggah ulang. Baris lain belum disimpan sampai semua baris benar.</div></div>' : '') +
+        '<div id="im-table"></div>' +
+        '<div class="sticky-bar imp-bar"><span class="grow small muted">' + icon('info', 'sm') + ' ' + (c.err ? 'Ada baris yang belum benar.' : siap ? siap + ' data siap disimpan' + (c.sama ? ' (' + c.sama + ' baris tidak berubah dilewati)' : '') + '.' : 'Semua data sudah sama — tidak ada yang perlu disimpan.') + '</span>' +
+          '<button type="button" class="btn outline" id="im-batal">Batal</button><button type="button" class="btn primary" id="im-simpan"' + (c.err || !siap ? ' disabled' : '') + '>' + icon('save') + 'Simpan ' + siap + ' Data</button></div></div>';
+    table = new Table($('#im-table', host), {
+      key: '_row', unit: 'baris', pageSize: 50, sizes: [50, 100, 250, 500], sort: null, cards: true,
+      columns: kolomPratinjau(),
+      rowAttr: r => r._st === 'err' ? 'data-err="1"' : '',
+      empty: () => emptyState('check-circle', 'Tidak ada baris bermasalah', '')
+    }).set(list);
+  }
+
+  function chip(r) {
+    const map = { baru: ['ok', 'Baru'], ubah: ['gold', 'Diperbarui'], sama: ['empty', 'Sama'], err: ['bad', 'Perbaiki'] };
+    const m = map[r._st];
+    return '<span class="badge ' + m[0] + '">' + m[1] + '</span>' + (r._msg && r._st !== 'sama' ? '<div class="small ' + (r._st === 'err' ? 'red-t' : 'muted') + ' mt-8">' + esc(r._msg) + '</div>' : '');
+  }
+  function kolomPratinjau() {
+    const base = [
+      { key: '_row', label: 'Baris', cls: 'no', sort: false, render: r => '<span class="mono">' + r._row + '</span>' },
+      { key: 'Nama_Lengkap', label: 'Nama Lengkap', cls: 'card-title', sort: false, render: r => '<b>' + (esc(r.Nama_Lengkap) || '<span class="faint">—</span>') + '</b>' },
+      { key: 'Pangkat', label: 'Pangkat', sort: false, render: r => esc(r.Pangkat) || '<span class="faint">—</span>' },
+      { key: 'NRP', label: jenis === 'gadik' ? 'NRP / NIP' : 'NRP', sort: false, render: r => r.NRP ? '<span class="nrp">' + esc(r.NRP) + '</span>' : '<span class="faint">—</span>' }
+    ];
+    if (jenis === 'gadik') base.push(
+      { key: 'Username', label: 'Username', sort: false, render: r => r.Username ? '<span class="mono">@' + esc(r.Username) + '</span>' + (r._uAuto ? ' <span class="tag">otomatis</span>' : '') : '<span class="faint">—</span>' },
+      { key: 'Password', label: 'Password', sort: false, render: r => r._ada ? '<span class="faint">tetap</span>' : r.Password ? '<span class="mono">' + esc(r.Password) + '</span>' + (r._pAuto ? ' <span class="tag">otomatis</span>' : '') : '<span class="faint">—</span>' },
+      { key: 'Kelas', label: 'Kelas', sort: false, cls: 'kls', render: r => r._kelas && r._kelas.length ? r._kelas.map(k => '<div>' + esc(kelasName(k)) + '</div>').join('') : '<span class="faint">—</span>' });
+    else base.push({ key: 'Peleton', label: 'Peleton', sort: false, render: r => r.ID_Peleton ? '<span class="chip line">' + esc(pelName(r.ID_Peleton)) + '</span>' : (r.Peleton ? esc(r.Peleton) : '<span class="faint">—</span>') });
+    base.push({ key: '_st', label: 'Status', sort: false, render: chip });
+    return base;
+  }
+
+  async function simpan(btn) {
+    const kirim = st.items.filter(i => i._st === 'baru' || i._st === 'ubah');
+    if (!kirim.length) return;
+    const ok = await confirmBox({ title: 'Simpan ' + kirim.length + ' data?', icon: 'save', okText: 'Ya, simpan', text: (jenis === 'gadik' ? kirim.filter(i => i._st === 'baru').length + ' akun Gadik baru dibuat dan ' + kirim.filter(i => i._st === 'ubah').length + ' diperbarui.' : kirim.filter(i => i._st === 'baru').length + ' peserta baru ditambahkan ke ' + judulKelas() + ' dan ' + kirim.filter(i => i._st === 'ubah').length + ' diperbarui.') + ' Nama & pangkat disimpan HURUF KAPITAL.' });
+    if (!ok) return;
+    const done = busy(btn, 'Menyimpan ' + kirim.length + ' data…');
+    const res = jenis === 'gadik'
+      ? await api('userImport', { items: kirim.map(i => ({ _row: i._row, Nama_Lengkap: i.Nama_Lengkap, Pangkat: i.Pangkat, NRP: i.NRP, Kontak: i.Kontak, Username: i.Username, Password: i._ada ? '' : i.Password, Kelas: i._kelas })) }, { tries: 1 })
+      : await api('pesertaImport', { idKelas: st.kelas, items: kirim.map(i => ({ _row: i._row, Nama_Lengkap: i.Nama_Lengkap, Pangkat: i.Pangkat, NRP: i.NRP, ID_Peleton: i.ID_Peleton })) }, { tries: 1 });
+    done();
+    if (!res.success) {
+      const errs = (res.data && res.data.errors) || [];
+      if (errs.length) {
+        errs.forEach(x => { const it = st.items.find(i => i._row === x.row); if (it) { it._st = 'err'; it._msg = x.message; } });
+        render();
+      }
+      toast('Import belum berhasil', res.message || 'Coba lagi.', 'error');
+      return;
+    }
+    if (jenis === 'gadik') {
+      applyUsers(res.data);
+      st.hasil = { baru: res.data.inserted, ubah: res.data.updated, akun: kirim.filter(i => i._st === 'baru').map(i => ({ nama: i.Nama_Lengkap, pangkat: i.Pangkat, nrp: i.NRP, u: i.Username, p: i.Password, kelas: i._kelas.map(k => kelasName(k)).join('; ') })) };
+    } else {
+      S.boot.peserta = S.boot.peserta.filter(p => p.ID_Kelas !== res.data.idKelas).concat(res.data.peserta);
+      bootChanged();
+      st.hasil = { baru: res.data.inserted, ubah: res.data.updated };
+    }
+    toast('Import berhasil', res.data.inserted + ' baru, ' + res.data.updated + ' diperbarui.', 'success');
+    render();
+  }
+
+  function renderHasil(host) {
+    const h = st.hasil;
+    host.innerHTML = '<div class="card pad imp-done"><div class="imp-done-ic">' + icon('check-circle') + '</div><div class="grow"><h3>Import selesai</h3>' +
+      '<p class="muted"><b>' + h.baru + '</b> ' + (jenis === 'gadik' ? 'akun Gadik baru' : 'peserta baru') + ' dan <b>' + h.ubah + '</b> data diperbarui' + (jenis === 'peserta' ? ' di ' + esc(judulKelas()) : '') + '. Data tersimpan HURUF KAPITAL dan urut abjad.</p>' +
+      '<div class="imp-acts mt-16">' + (h.akun && h.akun.length ? '<button type="button" class="btn primary" id="im-akun">' + icon('download') + 'Unduh Daftar Akun Baru (username &amp; password)</button>' : '') +
+      '<a class="btn outline" href="#/' + D.kembali + '">' + icon('arrow-right') + 'Lihat ' + (jenis === 'gadik' ? 'Personel & Akun' : 'Peserta Pelatihan') + '</a>' +
+      '<button type="button" class="btn ghost" id="im-batal">Import berkas lain</button></div>' +
+      (h.akun && h.akun.length ? '<p class="small red-t mt-16">' + icon('lock', 'sm') + ' Password awal hanya tampil sekarang. Unduh daftar akun lalu bagikan ke masing-masing Gadik secara pribadi.</p>' : '') +
+      '</div></div>';
+  }
+
+  function unduhAkunBaru(btn) {
+    const a = st.hasil.akun.slice().sort((x, y) => collator.compare(x.nama, y.nama));
+    unduhTabel({ judul: 'DAFTAR AKUN GADIK BARU', sub: 'RAHASIA — BAGIKAN KE MASING-MASING GADIK SECARA PRIBADI', nama: 'AKUN BARU',
+      catatan: 'Alamat aplikasi: ' + location.origin + location.pathname + ' • Gadik dapat mengganti password di menu Pengaturan.',
+      kolom: [{ t: 'NAMA LENGKAP', w: 40 }, { t: 'PANGKAT', w: 16 }, { t: 'NRP / NIP', w: 18, text: true }, { t: 'USERNAME', w: 22, text: true }, { t: 'PASSWORD AWAL', w: 18, text: true }, { t: 'KELAS PENUGASAN', w: 40 }],
+      baris: a.map(x => [x.nama, x.pangkat, x.nrp, x.u, x.p, x.kelas]), petunjuk: ['Simpan berkas ini dengan aman. Password awal tidak dapat dilihat lagi di aplikasi; bila lupa, gunakan Reset Password di menu Personel & Akun.'] },
+    namaBerkas(['AKUN-GADIK-BARU', tanggalBerkas()], 'xlsx'), btn);
+  }
+
+  return {
+    title: D.judul, roles: D.roles,
+    show(root, param, o) { if (o.isNew || !el || (jenis === 'peserta' && param && param !== st.kelas)) build(root, param); },
+    onBoot() { if (el && st.items && !st.hasil) periksaUlang(); }
+  };
+}
+page('impor-gadik', ImportPage('gadik'));
+page('impor-peserta', ImportPage('peserta'));
