@@ -1,8 +1,14 @@
 # Panduan Instalasi SIPL — SPN Polda Papua Barat
 
-**Sistem Informasi Pelatihan** • Versi 1.8.0
+**Sistem Informasi Pelatihan** • Versi 1.9.0
 
-> **Sudah memasang versi sebelumnya (1.0 – 1.7)?** Langsung ke **Bagian G — Memperbarui Versi**. Data Anda tetap aman dan database diperbarui otomatis.
+> **Sudah memasang versi sebelumnya (1.0 – 1.8)?** Langsung ke **Bagian G — Memperbarui Versi**. Data Anda tetap aman dan database diperbarui otomatis.
+
+### Yang baru di versi 1.9 — simpan instan & aplikasi terbuka seketika
+- **Simpan tanpa menunggu.** Saat menekan *Simpan* (peserta, mata pelajaran/kelas/peleton, penugasan, akun Gadik, jadwal tanpa bentrok) dan *Selesai & Kirim ke Rekap*, formulir langsung tertutup dan data **langsung tampil** di tabel. Server menyimpan di latar: di bilah atas muncul penanda **Menyimpan… → Tersimpan ✓**, dan baris yang sedang disimpan bertanda *menyimpan…*. Bila server menolak (mis. NRP sudah dipakai di kelas lain), perubahan dibatalkan otomatis dan formulir **dibuka lagi berisi isian tadi** beserta alasannya.
+- **Server menyimpan jauh lebih cepat.** Setiap simpan tidak lagi membaca ulang seluruh sheet: salinan tabel di cache server langsung diperbarui bersamaan dengan penulisan ke Google Sheets (tetap dicocokkan dengan jumlah baris sheet, sehingga perubahan manual di Sheets tidak tertimpa). Ini juga mempercepat import Excel dan autosimpan nilai harian walau datanya ribuan baris.
+- **Aplikasi terbuka seketika.** Berkas aplikasi disimpan di perangkat (service worker `sw.js`), sehingga kunjungan berikutnya tidak perlu mengunduh ulang — hanya `index.html` & `js/config.js` yang selalu diperiksa ke server, jadi pembaruan tetap langsung terbaca. Huruf Google Fonts dimuat tanpa menahan tampilan pertama.
+- Perubahan manual baris/kolom di Google Sheets kini juga menyegarkan cache (trigger *onChange* dipasang otomatis saat pembaruan).
 
 ### Yang baru di versi 1.8 — Import & Ekspor Excel, login super cepat
 - **Tambah data: Manual atau Import Excel.** Tombol **Tambah Gadik** (Admin, menu Personel & Akun) dan **Tambah Peserta** (Gadik, menu Peserta Pelatihan) kini menawarkan dua pilihan: **Manual** (formulir satu per satu) atau **Import Excel** (banyak data sekaligus). Di halaman Import tersedia tombol **Unduh Template Excel** (lembar rapi berkop, judul kolom berwarna, kolom NRP berformat teks, daftar pilihan kelas/peleton, dan sheet PETUNJUK) serta **Ekspor Excel** (data saat ini, bisa diperbarui lalu diimpor kembali). Lihat **Bagian M**.
@@ -297,7 +303,7 @@ Tunggu 1–2 menit; bila tampilan masih lama tekan **Ctrl + Shift + R**.
 
 ---
 
-## Bagian G — Memperbarui Versi (1.0 – 1.7 → 1.8)
+## Bagian G — Memperbarui Versi (1.0 – 1.8 → 1.9)
 
 Lakukan saat aplikasi sepi (mis. sore hari). Data lama **tidak dihapus**. Langkahnya sama dari versi mana pun.
 
@@ -306,6 +312,7 @@ Lakukan saat aplikasi sepi (mis. sore hari). Data lama **tidak dihapus**. Langka
 2. Berkas **Kode** → hapus seluruh isinya → tempel isi `Kode.gs` versi terbaru. Lakukan hal yang sama untuk **Migrasi** (`Migrasi.gs`). Tekan **Ctrl + S**.
 3. **Terapkan → Kelola deployment → ✏️ Edit → Versi: Versi baru → Terapkan.** (URL `/exec` tetap sama.)
 4. Database diperbarui **otomatis** pada permintaan pertama (mis. saat ada yang login). Pembaruan ini:
+   - (v1.9) tidak ada sheet/kolom baru; trigger *onChange* (penyegar cache saat baris ditambah/dihapus manual) dipasang otomatis,
    - (v1.8) tidak ada sheet/kolom baru — import Excel memakai sheet yang sudah ada,
    - (v1.7) tidak membuat sheet baru; sheet lama `Data_Pengasuh` & `Nilai_Mental` tidak dipakai lagi dan **tidak dihapus otomatis** (bersihkan dengan `hapusDataPengasuh` bila diinginkan — Bagian L),
    - membuat sheet **`Dokumen_Jadwal`** dan **`Foto_Akun`**, serta kolom **`Foto_Ver`** di sheet `Users` (v1.6),
@@ -319,17 +326,18 @@ Lakukan saat aplikasi sepi (mis. sore hari). Data lama **tidak dihapus**. Langka
 
 **2. Frontend**
 1. Simpan dulu nilai `GAS_URL` dari `js/config.js` lama Anda.
-2. Ekstrak `sipl-frontend.zip` versi 1.8, lalu **salin seluruh isinya menimpa** isi folder repository lama Anda (`index.html`, `css`, `js`, `img`, dan berkas `.md`).
+2. Ekstrak `sipl-frontend.zip` versi 1.9, lalu **salin seluruh isinya menimpa** isi folder repository lama Anda (`index.html`, **`sw.js`**, `css`, `js`, `img`, dan berkas `.md`). Berkas `sw.js` wajib ikut di folder utama (sejajar `index.html`).
 3. Buka `js/config.js` yang baru → isi kembali `GAS_URL` yang tadi disimpan.
 4. Kirim ke GitHub:
    ```bash
    git add .
-   git commit -m "SIPL 1.8 - import & ekspor Excel, login cepat"
+   git commit -m "SIPL 1.9 - simpan instan, aplikasi terbuka seketika"
    git push
    ```
 5. Tunggu 1–2 menit. Berkas versi baru otomatis dimuat (tidak perlu hapus cache); bila tampilan masih lama, tekan **Ctrl + Shift + R**.
 
 **Catatan pembaruan**
+- **v1.9**: setelah `git push`, pengguna cukup membuka/memuat ulang aplikasi seperti biasa — versi baru terbaca otomatis. Bila suatu perangkat masih menampilkan versi lama, tekan **Ctrl + Shift + R** sekali.
 - **v1.7**: akun Pengasuh lama tidak dapat masuk lagi. Beritahukan kepada para Pengasuh bila perlu. Huruf *Playfair Display* dimuat dari Google Fonts; bila jaringan memblokirnya, judul memakai huruf serif bawaan perangkat (Georgia/Times) dan tampilan tetap rapi.
 - **Jadwal lama** (dibuat sebelum v1.4, berulang tiap pekan tanpa tanggal) **tetap berjalan** dan ditandai *Format lama* di tampilan Daftar. Saat diubah, lengkapi tanggal pelaksanaan dan jam 08.00–17.00. Untuk mapel berikutnya, buat jadwal baru dengan tanggal mulai — lalu hapus jadwal lama bila sudah tidak dipakai (hati-hati: nilai sesi jadwal itu ikut terhapus).
 - **Logo lama (v1.0–1.2)** yang diunggah lewat Google Drive tetap tampil. Untuk memakai cara penyimpanan baru (lebih andal), unggah ulang logo di **Pengaturan**.

@@ -1,4 +1,4 @@
-# SIPL — SPN Polda Papua Barat (Frontend) • v1.8.0
+# SIPL — SPN Polda Papua Barat (Frontend) • v1.9.0
 
 Tampilan web **Sistem Informasi Pelatihan** untuk Admin Satdik dan Gadik.
 Berkas statis (HTML/CSS/JS murni, tanpa framework) yang di-hosting di GitHub Pages dan terhubung ke backend Google Apps Script.
@@ -9,6 +9,7 @@ Berkas statis (HTML/CSS/JS murni, tanpa framework) yang di-hosting di GitHub Pag
 ## Struktur
 ```
 index.html            Kerangka aplikasi + halaman login
+sw.js                 Service worker: berkas aplikasi disimpan di perangkat agar terbuka seketika (wajib sejajar index.html)
 css/style.css         Tema burgundy–emas–putih, responsif (HP → kartu)
 js/config.js          Alamat server (GAS_URL), teks tampilan, kota tanda tangan (KOTA) & logo bawaan (LOGO)
 js/icons.js           Ikon SVG ringan (tanpa pustaka luar)

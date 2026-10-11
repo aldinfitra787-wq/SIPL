@@ -52,7 +52,7 @@ function openModal(o) {
       if (!ov.isConnected) return;
       ov.remove();
       const i = _modals.indexOf(handle); if (i > -1) _modals.splice(i, 1);
-      if (prevFocus && prevFocus.focus) try { prevFocus.focus(); } catch (e) { /* abaikan */ }
+      if (prevFocus && prevFocus.focus && prevFocus.isConnected) try { prevFocus.focus({ preventScroll: true }); } catch (e) { /* abaikan */ }
       if (o.onClose) o.onClose(result);
     }
   };
@@ -97,6 +97,17 @@ function formValues(form) {
     else o[el.name] = el.value.trim();
   });
   return o;
+}
+/** Isi ulang formulir dari objek nilai (dipakai bila simpan di latar gagal). */
+function isiForm(form, v) {
+  if (!form || !v) return;
+  $$('input, select, textarea', form).forEach(el => {
+    if (!el.name || !(el.name in v)) return;
+    const x = v[el.name];
+    if (el.type === 'checkbox') el.checked = Array.isArray(x) ? x.indexOf(el.value) > -1 : !!x;
+    else if (el.type === 'radio') el.checked = String(x) === el.value;
+    else el.value = x == null ? '' : x;
+  });
 }
 function clearErrors(root) {
   $$('.has-error', root).forEach(el => el.classList.remove('has-error'));

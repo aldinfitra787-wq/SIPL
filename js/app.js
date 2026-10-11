@@ -353,6 +353,11 @@ window.addEventListener('offline', () => { updateNet(); toast('Koneksi terputus'
 // --------------------------------------------------------------------------
 // Mulai
 // --------------------------------------------------------------------------
+// Service worker: kunjungan berikutnya membuka aplikasi seketika dari cache perangkat (lihat sw.js).
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost') && (!navigator.webdriver || /[?&]sw=1/.test(location.search))) {
+  window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
+}
+
 (function init() {
   hydrateIcons(document);
   $('#login-year').textContent = new Date().getFullYear();

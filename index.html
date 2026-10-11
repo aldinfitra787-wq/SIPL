@@ -12,14 +12,15 @@
   <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="css/style.css?v=1.8.0">
-  <script src="js/config.js?v=1.8.0" defer></script>
-  <script src="js/icons.js?v=1.8.0" defer></script>
-  <script src="js/core.js?v=1.8.0" defer></script>
-  <script src="js/ui.js?v=1.8.0" defer></script>
-  <script src="js/pages.js?v=1.8.0" defer></script>
-  <script src="js/app.js?v=1.8.0" defer></script>
+  <!-- Huruf dimuat tanpa menahan tampilan (halaman langsung tampil dengan huruf cadangan) -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'">
+  <link rel="stylesheet" href="css/style.css?v=1.9.0">
+  <script src="js/config.js?v=1.9.0" defer></script>
+  <script src="js/icons.js?v=1.9.0" defer></script>
+  <script src="js/core.js?v=1.9.0" defer></script>
+  <script src="js/ui.js?v=1.9.0" defer></script>
+  <script src="js/pages.js?v=1.9.0" defer></script>
+  <script src="js/app.js?v=1.9.0" defer></script>
 </head>
 <body>
 
@@ -129,6 +130,7 @@
         <button class="btn icon menu-btn" id="btn-menu" aria-label="Buka menu" data-ico="menu"></button>
         <div class="crumb"><span data-ico="home" class="hide-sm"></span><span class="hide-sm">SIPL</span><span class="sep hide-sm">/</span><b id="crumb-title">Dashboard</b></div>
         <div class="top-right">
+          <span class="save-st" id="save-status" role="status" aria-live="polite"></span>
           <span class="net" id="net-status"><span data-ico="wifi-off"></span>Offline</span>
           <div class="me">
             <div class="who"><b id="top-name">—</b><small id="top-sub"></small></div>

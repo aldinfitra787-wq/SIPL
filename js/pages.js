@@ -131,8 +131,43 @@ class AutoSaver {
     }
   }
 }
-function pendingDrafts() { let n = 0; SAVERS.forEach(s => { n += s.count(); }); return n; }
-function flushAllSavers() { return Promise.all(Array.from(SAVERS).map(s => s.flush())); }
+function pendingDrafts() { let n = Latar.n; SAVERS.forEach(s => { n += s.count(); }); return n; }
+function flushAllSavers() { return Promise.all(Array.from(SAVERS).map(s => s.flush()).concat(Array.from(Latar.jobs))); }
+
+// ---------- SIMPAN DI LATAR (v1.9): layar langsung berubah, server menyusul ----------
+// Data tampil seketika (tanpa menunggu server). Bila server menolak, perubahan dibatalkan
+// dan formulir dibuka lagi berisi isian tadi beserta pesan kesalahannya.
+const Latar = { n: 0, jobs: new Set() };
+let _tmpN = 0;
+function tmpId(prefix) { return prefix + '-BARU-' + Date.now().toString(36) + (++_tmpN); }
+function simpanLatar(o) {
+  try { if (o.apply) o.apply(); } catch (e) { console.error(e); }
+  Latar.n++; tandaSimpan();
+  const p = api(o.action, o.data, o.opt).then(res => {
+    Latar.n--;
+    if (res.success) { try { if (o.done) o.done(res); } catch (e) { console.error(e); } tandaSimpan('ok'); }
+    else {
+      try { if (o.rollback) o.rollback(res); } catch (e) { console.error(e); }
+      tandaSimpan('err');
+      toast(o.gagal || 'Data belum tersimpan', res.message || 'Periksa koneksi lalu coba lagi.', 'error');
+      try { if (o.fail) o.fail(res); } catch (e) { console.error(e); }
+    }
+    Latar.jobs.delete(p);
+    return res;
+  });
+  Latar.jobs.add(p);
+  return p;
+}
+function tandaSimpan(st) {
+  const el = $('#save-status');
+  if (!el) return;
+  clearTimeout(el._t);
+  if (Latar.n > 0) { el.className = 'save-st on'; el.innerHTML = '<span class="spin"></span><span>Menyimpan…</span>'; return; }
+  if (st === 'ok') { el.className = 'save-st on ok'; el.innerHTML = icon('check-circle', 'sm') + '<span>Tersimpan</span>'; el._t = setTimeout(() => { el.className = 'save-st'; }, 1600); }
+  else if (st === 'err') { el.className = 'save-st on err'; el.innerHTML = icon('alert-triangle', 'sm') + '<span>Gagal tersimpan</span>'; el._t = setTimeout(() => { el.className = 'save-st'; }, 6000); }
+  else el.className = 'save-st';
+}
+const tandaProses = '<span class="pending-t"><span class="spin"></span>menyimpan…</span>';
 window.addEventListener('online', () => flushAllSavers());
 window.addEventListener('beforeunload', e => { if (pendingDrafts()) { e.preventDefault(); e.returnValue = ''; } });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && pendingDrafts()) flushAllSavers(); });
@@ -640,8 +675,10 @@ const PesertaPage = (() => {
       empty: () => emptyState('users', 'Belum ada peserta', st.q ? 'Tidak ada peserta yang cocok dengan pencarian.' : 'Belum ada peserta di kelas/peleton ini.', canEdit() && !st.q ? '<button class="btn primary" data-act="add">' + icon('plus') + 'Tambah Peserta</button>' : ''),
       onAction: (act, id) => {
         if (act === 'add') return tambah();
-        if (act === 'edit' && canEdit()) return openForm(R().peserta[id]);
-        if (act === 'del') return remove(R().peserta[id]);
+        const row = R().peserta[id];
+        if (row && row._pending) return;
+        if (act === 'edit' && canEdit()) return openForm(row);
+        if (act === 'del') return remove(row);
       }
     });
     $('#ps-kelas', el).addEventListener('change', e => { st.kelas = e.target.value; st.pel = ''; fillPel(); refresh(); });
@@ -661,7 +698,7 @@ const PesertaPage = (() => {
     ];
     if (S.role === 'Admin' || myKelas().length > 1) cols.push({ key: 'kelas', label: 'Kelas', sort: r => kelasName(r.ID_Kelas, true), render: r => esc(kelasName(r.ID_Kelas)) + '<div class="faint small">' + esc((R().kelas[r.ID_Kelas] || {}).Nama_Angkatan || '') + '</div>' });
     cols.push({ key: 'pel', label: 'Peleton', sort: r => pelName(r.ID_Peleton), render: r => r.ID_Peleton ? '<span class="chip line">' + esc(pelName(r.ID_Peleton)) + '</span>' : '<span class="faint">—</span>' });
-    if (canDel()) cols.push({ key: 'acts', label: 'Aksi', sort: false, cls: 'acts-cell', render: () => '<div class="acts">' + (canEdit() ? '<button class="btn icon" data-act="edit" title="Ubah">' + icon('edit') + '</button>' : '') + '<button class="btn icon red" data-act="del" title="Hapus peserta">' + icon('trash') + '</button></div>' });
+    if (canDel()) cols.push({ key: 'acts', label: 'Aksi', sort: false, cls: 'acts-cell', render: r => r._pending ? tandaProses : '<div class="acts">' + (canEdit() ? '<button class="btn icon" data-act="edit" title="Ubah">' + icon('edit') + '</button>' : '') + '<button class="btn icon red" data-act="del" title="Hapus peserta">' + icon('trash') + '</button></div>' });
     return cols;
   }
 
@@ -707,7 +744,7 @@ const PesertaPage = (() => {
     });
   }
 
-  function openForm(p) {
+  function openForm(p, pre) {
     const isEdit = !!p;
     const kel = myKelas();
     const kSel = isEdit ? p.ID_Kelas : (st.kelas || (kel[0] && kel[0].ID_Kelas) || '');
@@ -731,6 +768,7 @@ const PesertaPage = (() => {
     };
     fillP();
     selK.addEventListener('change', fillP);
+    if (pre) { isiForm(form, pre.v); fillP(); selP.value = pre.v.ID_Peleton || ''; showServerError(form, pre.res, '#pf-alert'); }
     form.addEventListener('submit', e => { e.preventDefault(); m.$('#pf-save').click(); });
     m.$('#pf-save').onclick = async () => {
       clearErrors(form); m.$('#pf-alert').hidden = true;
@@ -742,16 +780,19 @@ const PesertaPage = (() => {
       const dup = S.boot.peserta.find(x => x.NRP.toUpperCase() === v.NRP.replace(/\s+/g, '').toUpperCase() && (!isEdit || x.ID_Peserta !== p.ID_Peserta));
       if (dup) return fieldError(form, 'NRP', 'NRP ' + v.NRP + ' sudah terdaftar atas nama ' + dup.Nama_Lengkap + '. Setiap NRP harus unik.');
       if (isEdit) v.ID_Peserta = p.ID_Peserta;
-      const done = busy(m.$('#pf-save'), 'Menyimpan…');
-      const res = await api('pesertaSave', v);
-      done();
-      if (!res.success) return showServerError(form, res, '#pf-alert');
-      const rec = res.data.peserta, list = S.boot.peserta, i = list.findIndex(x => x.ID_Peserta === rec.ID_Peserta);
-      if (i > -1) list[i] = rec; else list.push(rec);
-      bootChanged();
+      // Simpan di latar: tabel langsung diperbarui, server menyusul.
+      const lokal = { ID_Kelas: v.ID_Kelas, ID_Peleton: v.ID_Peleton || '', Nama_Lengkap: v.Nama_Lengkap.replace(/\s+/g, ' '), Pangkat: v.Pangkat || '', NRP: v.NRP.replace(/\s+/g, ''), _pending: true };
+      const old = isEdit ? Object.assign({}, p) : null, id = isEdit ? p.ID_Peserta : tmpId('PST');
+      const cari = () => S.boot.peserta.findIndex(x => x.ID_Peserta === id);
       m.close();
-      toast(isEdit ? 'Data peserta diperbarui' : 'Peserta ditambahkan', rec.Nama_Lengkap + ' • NRP ' + rec.NRP);
-      refresh(true);
+      toast(isEdit ? 'Data peserta diperbarui' : 'Peserta ditambahkan', lokal.Nama_Lengkap + ' • NRP ' + lokal.NRP, 'success');
+      simpanLatar({
+        action: 'pesertaSave', data: v, gagal: 'Data peserta belum tersimpan',
+        apply() { const i = cari(), rec = Object.assign({ ID_Peserta: id }, lokal); if (i > -1) S.boot.peserta[i] = rec; else S.boot.peserta.push(rec); bootChanged(); refresh(true); },
+        done(res) { const i = cari(), rec = res.data.peserta; if (i > -1) S.boot.peserta[i] = rec; else S.boot.peserta.push(rec); bootChanged(); },
+        rollback() { const i = cari(); if (i > -1) { if (old) S.boot.peserta[i] = old; else S.boot.peserta.splice(i, 1); } bootChanged(); },
+        fail(res) { if (res.code !== 'AUTH') openForm(old, { v, res }); }
+      });
     };
   }
 
@@ -1298,19 +1339,23 @@ const NilaiPage = (() => {
         '<br><br>Setelah dikirim, nilai sesi ini <b>dikunci</b>. Koreksi hanya dapat dilakukan setelah Admin Satdik membuka kunci.'
     });
     if (!ok) return;
-    const tgl = st.tgl, jid = st.jid, done = busy($('#nh-done', el), 'Mengirim…');
-    const res = await api('nilaiSelesai', { tanggal: tgl, idJadwal: jid });
-    done();
-    if (!res.success) {
-      if (res.code === 'EMPTY') { toast('Belum ada nilai', res.message, 'warning'); load(true); return; }
-      toast('Gagal mengirim ke rekap', res.message, 'error');
-      return;
-    }
-    const d = (S.data.harian || {})[tgl];
-    if (d) { d.sesi = d.sesi || {}; d.sesi[jid] = res.data.sesi; cachePut('harian:' + tgl, d); }
-    sesiStatUpdate(res.data.sesi);
-    toast('Nilai terkirim ke rekap', mapelName(j.ID_Mapel) + ' • ' + kelasName(j.ID_Kelas) + ' • ' + res.data.sesi.Jumlah + ' peserta. Nilai sesi ini kini terkunci.');
-    if (st.tgl === tgl && st.jid === jid) { useSaver(); renderSesi(); renderDraf(); renderHead(); refreshTable(true); }
+    // Kirim di latar: sesi langsung tampil "Masuk rekap" & terkunci, server menyusul.
+    const tgl = st.tgl, jid = st.jid, d = (S.data.harian || {})[tgl];
+    const prev = d && d.sesi ? d.sesi[jid] : undefined;
+    const lokal = Object.assign({ ID_Sesi: '', Tanggal: tgl, ID_Jadwal: jid, ID_Kelas: j.ID_Kelas, ID_Mapel: j.ID_Mapel, ID_Gadik: j.ID_Gadik }, prev || {}, { Status: 'Selesai', Jumlah: filled, Waktu_Selesai: new Date().toISOString(), Catatan_Admin: '' });
+    const pasang = info => {
+      const dd = (S.data.harian || {})[tgl];
+      if (dd) { dd.sesi = dd.sesi || {}; if (info) dd.sesi[jid] = info; else delete dd.sesi[jid]; cachePut('harian:' + tgl, dd); }
+      sesiStatUpdate(info || Object.assign({}, lokal, { Status: 'Draf' }));
+      if (el && st.tgl === tgl && st.jid === jid) { useSaver(); renderSesi(); renderDraf(); renderHead(); refreshTable(true); }
+    };
+    toast('Nilai terkirim ke rekap', mapelName(j.ID_Mapel) + ' • ' + kelasName(j.ID_Kelas) + ' • ' + filled + ' peserta. Nilai sesi ini kini terkunci.', 'success');
+    simpanLatar({
+      action: 'nilaiSelesai', data: { tanggal: tgl, idJadwal: jid }, gagal: 'Nilai belum terkirim ke rekap',
+      apply() { pasang(lokal); },
+      done(res) { pasang(res.data.sesi); },
+      rollback(res) { pasang(prev); if (res.code === 'EMPTY') load(true); }
+    });
   }
 
   function load(force) {

@@ -1033,3 +1033,18 @@ div.empty h3 { font-family: var(--display); font-size: 20px; font-weight: 600; }
 .imp-done h3 { font-family: var(--display); font-size: 22px; font-weight: 600; margin-bottom: 4px; }
 @media (max-width: 900px) { .imp-steps { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 600px) { .imp-step { padding: 18px; } .imp-step .num-badge { display: none; } .imp-acts .btn { flex: 1 1 100%; } .imp-done { flex-direction: column; } }
+
+/* ==========================================================================
+   v1.9 — Simpan di latar: penanda status & baris yang sedang disimpan
+   ========================================================================== */
+.save-st { display: none; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 999px; font: 600 12px/1 var(--font); border: 1px solid var(--border); background: #fff; color: var(--muted); white-space: nowrap; }
+.save-st.on { display: inline-flex; animation: fadeIn .2s ease both; }
+.save-st .spin, .pending-t .spin { width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; flex: none; display: inline-block; }
+.save-st.ok { color: var(--green); border-color: #bbf7d0; background: var(--green-t); }
+.save-st.err { color: var(--red); border-color: var(--red-b); background: var(--red-t); }
+.pending-t { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--gold-d); white-space: nowrap; }
+.slot.pending { opacity: .7; border-style: dashed; }
+@media (max-width: 600px) { .save-st span:last-child { display: none; } .save-st { padding: 0 9px; } }
+
+/* v1.9: fokus tombol tidak boleh menggeser isi kartu judul (overflow: clip bukan wadah gulir) */
+.hero { overflow: clip; }

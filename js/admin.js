@@ -19,7 +19,13 @@ function applyUsers(d) {
   bootChanged();
 }
 function loadUsers(after, force) {
-  return swr('users', 'usersList', {}, d => { S.data.users = d; if (d.gadik) { S.boot.ref.gadik = d.gadik; S.refVer++; } after(); }, { fresh: force ? 0 : 60000, force, onError: res => after(res) });
+  return swr('users', 'usersList', {}, d => {
+    // akun yang sedang disimpan di latar tetap tampil sampai server selesai
+    const pend = ((S.data.users && S.data.users.users) || []).filter(u => u._pending && !(d.users || []).some(x => x.ID_User === u.ID_User));
+    S.data.users = pend.length ? Object.assign({}, d, { users: (d.users || []).concat(pend) }) : d;
+    if (d.gadik) { S.boot.ref.gadik = d.gadik; S.refVer++; }
+    after();
+  }, { fresh: force ? 0 : 60000, force, onError: res => after(res) });
 }
 
 // ==========================================================================
@@ -50,7 +56,7 @@ const PersonelPage = (() => {
         { key: 'NRP', label: 'Pangkat / NRP', render: u => esc(u.Pangkat || '—') + '<div><span class="nrp">' + esc(u.NRP || '—') + '</span></div>' },
         { key: 'Role', label: 'Peran', render: u => roleBadge(u.Role) },
         { key: 'asg', label: 'Penugasan', sort: u => u.penugasan.length ? kelasName(u.penugasan[0].ID_Kelas) : '', render: u => asgText(u.penugasan) },
-        { key: 'acts', label: 'Aksi', sort: false, cls: 'acts-cell', render: u => '<div class="acts">' +
+        { key: 'acts', label: 'Aksi', sort: false, cls: 'acts-cell', render: u => u._pending ? tandaProses : '<div class="acts">' +
           (u.Status_Aktif !== 'Aktif' ? '<button class="btn outline xs" data-act="aktifkan" title="Akun ini dinonaktifkan di versi lama">' + icon('power', 'sm') + 'Aktifkan</button>' : '') +
           '<button class="btn icon" data-act="edit" title="Ubah akun">' + icon('edit') + '</button>' +
           '<button class="btn icon" data-act="foto" title="Pas foto 4×6">' + icon('camera') + '</button>' +
@@ -60,7 +66,7 @@ const PersonelPage = (() => {
       empty: () => emptyState('id-card', 'Belum ada akun', st.q ? 'Tidak ada personel yang cocok.' : 'Tambahkan akun Gadik pertama.', st.q ? '' : '<a class="btn primary" href="#/akun/baru">' + icon('user-plus') + 'Tambah Akun</a>'),
       onAction: (act, id) => {
         const u = staffList().find(x => x.ID_User === id);
-        if (!u) return;
+        if (!u || u._pending) return;
         if (act === 'edit') go('akun/' + encodeURIComponent(id));
         if (act === 'pw') resetPassword(u);
         if (act === 'foto') pilihPasFoto(u).then(v => { if (v !== null) render(true); });
@@ -220,6 +226,8 @@ const AkunForm = (() => {
     }
     form.addEventListener('submit', e => { e.preventDefault(); submit(form, isNew); });
     const fb = $('#af-foto', el); if (fb) fb.onclick = () => pilihPasFoto(u);
+    const dr = AkunForm._draft;
+    if (dr) { AkunForm._draft = null; isiForm(form, dr.v); model.asg = dr.asg; showServerError(form, dr.res, '#af-alert'); }
     syncRole();
   }
 
@@ -268,18 +276,29 @@ const AkunForm = (() => {
     }
     v.penugasan = model.asg.filter(a => a.ID_Kelas);
     if (!isNew) v.ID_User = model.u.ID_User;
+    const nrpDup = staffList().find(x => String(x.NRP).toUpperCase() === String(v.NRP).replace(/\s+/g, '').toUpperCase() && (isNew || x.ID_User !== model.u.ID_User));
+    if (nrpDup) return fieldError(form, 'NRP', 'NRP sudah dipakai ' + nrpDup.Nama_Lengkap + '.');
+    const draft = Object.assign({}, v);
     delete v.Password2;
-    const done = busy($('#af-save', el), 'Menyimpan…');
-    const res = await api('userSave', v);
-    done();
-    if (!res.success) { showServerError(form, res, '#af-alert'); if (!$('#af-alert', el).hidden) $('#af-alert', el).scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
-    applyUsers(res.data);
-    toast(isNew ? 'Akun diterbitkan' : 'Akun diperbarui', v.Nama_Lengkap + ' (@' + v.Username + ')');
-    go('personel');
+    // Simpan di latar: daftar personel langsung diperbarui, server menyusul.
+    const data = usersData() ? S.data.users : null, snap = data ? data.users.slice() : null;
+    const id = isNew ? tmpId('USR') : model.u.ID_User;
+    const lokal = Object.assign({}, isNew ? { Status_Aktif: 'Aktif', Foto_Ver: '' } : model.u, {
+      ID_User: id, Username: v.Username, Nama_Lengkap: v.Nama_Lengkap, Role: 'Gadik', Pangkat: v.Pangkat, NRP: v.NRP.replace(/\s+/g, ''), Kontak: v.Kontak || '',
+      penugasan: v.penugasan.map((a, i) => ({ ID_Penugasan: tmpId('PNG') + i, ID_Kelas: a.ID_Kelas, ID_Peleton: '' })), _pending: true
+    });
+    toast(isNew ? 'Akun diterbitkan' : 'Akun diperbarui', v.Nama_Lengkap + ' (@' + v.Username + ')', 'success');
+    simpanLatar({
+      action: 'userSave', data: v, gagal: 'Akun belum tersimpan',
+      apply() { if (data) { const i = data.users.findIndex(x => x.ID_User === id); if (i > -1) data.users[i] = lokal; else data.users.push(lokal); } go('personel'); },
+      done(res) { applyUsers(res.data); },
+      rollback() { if (data) { data.users = snap; bootChanged(); } },
+      fail(res) { if (res.code === 'AUTH') return; AkunForm._draft = { v: draft, asg: model.asg, res }; go(isNew ? 'akun/baru' : 'akun/' + encodeURIComponent(id)); }
+    });
   }
 
   return {
-    title: p => (!p || p === 'baru' ? 'Tambah Akun' : 'Ubah Akun'), roles: ['Admin'],
+    title: p => (!p || p === 'baru' ? 'Tambah Akun' : 'Ubah Akun'), roles: ['Admin'], _draft: null,
     show(root, param) { el = root; render(param); }
   };
 })();
@@ -331,6 +350,7 @@ const MasterPage = (() => {
 
   /** Tombol aksi: Ubah + Hapus. "Aktifkan" hanya muncul untuk data yang dinonaktifkan di versi lama. */
   function actBtns(row) {
+    if (row._pending) return tandaProses;
     return '<div class="acts">' + (isAktif(row.Status) ? '' : '<button class="btn outline xs" data-act="aktifkan" title="Data ini dinonaktifkan di versi lama">' + icon('power', 'sm') + 'Aktifkan</button>') +
       '<button class="btn icon" data-act="edit" title="Ubah">' + icon('edit') + '</button>' +
       '<button class="btn icon red" data-act="del" title="Hapus">' + icon('trash') + '</button></div>';
@@ -365,7 +385,7 @@ const MasterPage = (() => {
         { key: 'Role', label: 'Peran', render: r => roleBadge(r.Role) },
         { key: 'kelas', label: 'Kelas', sort: r => kelasName(r.ID_Kelas, true), render: r => esc(kelasName(r.ID_Kelas, true)) },
         { key: 'mapel', label: 'Mapel Diampu', sort: false, render: r => { const g = (S.boot.ref.gadik || []).find(x => x.ID_User === r.ID_User), m = g ? [...new Set(S.boot.jadwal.filter(j => j.ID_Gadik === g.ID_Gadik && j.ID_Kelas === r.ID_Kelas).map(j => mapelName(j.ID_Mapel)))] : []; return m.length ? esc(m.join(', ')) : '<span class="faint">Belum ada jadwal</span>'; } },
-        { key: 'acts', label: 'Aksi', sort: false, cls: 'acts-cell', render: () => '<div class="acts"><button class="btn icon red" data-act="del" title="Hapus penugasan">' + icon('trash') + '</button></div>' }
+        { key: 'acts', label: 'Aksi', sort: false, cls: 'acts-cell', render: r => r._pending ? tandaProses : '<div class="acts"><button class="btn icon red" data-act="del" title="Hapus penugasan">' + icon('trash') + '</button></div>' }
       ]
     };
     const keys = { kelas: 'ID_Kelas', peleton: 'ID_Peleton', mapel: 'ID_Mapel', penugasan: 'ID_Penugasan' };
@@ -389,7 +409,7 @@ const MasterPage = (() => {
     else {
       if (!usersData()) { $('#ms-table', el).innerHTML = skeletonRows(5, 4); loadUsers(e => { if (e) $('#ms-table', el).innerHTML = errorState(e.message); else render(true); }); return; }
       rows = [];
-      staffList().forEach(u => u.penugasan.forEach(a => rows.push({ ID_Penugasan: a.ID_Penugasan, ID_User: u.ID_User, Foto_Ver: u.Foto_Ver, Nama: u.Nama_Lengkap, Username: u.Username, Role: u.Role, Status_Aktif: u.Status_Aktif, ID_Kelas: a.ID_Kelas, ID_Peleton: a.ID_Peleton })));
+      staffList().forEach(u => u.penugasan.forEach(a => rows.push({ ID_Penugasan: a.ID_Penugasan, ID_User: u.ID_User, Foto_Ver: u.Foto_Ver, Nama: u.Nama_Lengkap, Username: u.Username, Role: u.Role, Status_Aktif: u.Status_Aktif, ID_Kelas: a.ID_Kelas, ID_Peleton: a.ID_Peleton, _pending: a._pending })));
       rows = rows.filter(r => (!st.kelas || r.ID_Kelas === st.kelas) && (!q || norm(r.Nama + ' ' + r.Username + ' ' + kelasName(r.ID_Kelas, true)).indexOf(q) > -1));
     }
     table.set(rows, keep);
@@ -432,9 +452,9 @@ const MasterPage = (() => {
   }
 
 
-  function openForm(tab, row) {
+  function openForm(tab, row, pre) {
     const isEdit = !!row;
-    if (tab === 'penugasan') return openAsgForm();
+    if (tab === 'penugasan') return openAsgForm(pre);
     let body, title, ic;
     if (tab === 'kelas') {
       title = isEdit ? 'Ubah Angkatan & Kelas' : 'Tambah Angkatan & Kelas'; ic = 'building';
@@ -456,6 +476,7 @@ const MasterPage = (() => {
       foot: '<button class="btn outline" data-close>Batal</button><button class="btn primary" id="mf-save">' + icon('save') + 'Simpan Data Master</button>'
     });
     const form = m.$('#mf');
+    if (pre) { isiForm(form, pre.v); showServerError(form, pre.res, '#mf-alert'); }
     form.addEventListener('submit', e => { e.preventDefault(); m.$('#mf-save').click(); });
     m.$('#mf-save').onclick = async () => {
       clearErrors(form); m.$('#mf-alert').hidden = true;
@@ -463,16 +484,27 @@ const MasterPage = (() => {
       const req = { kelas: ['Nama_Angkatan', 'Nama_Kelas'], peleton: ['ID_Kelas', 'Nama_Peleton'], mapel: ['Nama_Mapel'] }[tab];
       for (let i = 0; i < req.length; i++) if (!v[req[i]]) return fieldError(form, req[i], 'Wajib diisi.');
       if (isEdit) v[DEF[tab].id] = row[DEF[tab].id];
-      const done = busy(m.$('#mf-save'), 'Menyimpan…');
-      const res = await api(DEF[tab].save, v);
-      done();
-      if (!res.success) return showServerError(form, res, '#mf-alert');
-      m.close(); applyRef(res);
-      toast(isEdit ? 'Data diperbarui' : 'Data ditambahkan', '');
+      const D = DEF[tab], list = D.list(), key = D.id;
+      if (tab === 'mapel' && list.some(x => x[key] !== v[key] && norm(x.Nama_Mapel) === norm(v.Nama_Mapel))) return fieldError(form, 'Nama_Mapel', 'Mata pelajaran dengan nama ini sudah ada.');
+      // Simpan di latar: tabel langsung diperbarui, server menyusul.
+      const snap = { kelas: S.boot.ref.kelas.slice(), peleton: S.boot.ref.peleton.slice(), mapel: S.boot.ref.mapel.slice() };
+      const id = isEdit ? row[key] : tmpId(key.replace('ID_', '').toUpperCase().slice(0, 3));
+      const lokal = Object.assign({}, isEdit ? row : { Status: 'Aktif' }, v, { _pending: true });
+      lokal[key] = id;
+      if (lokal.Bobot_JP !== undefined && lokal.Bobot_JP !== '') lokal.Bobot_JP = Number(lokal.Bobot_JP) || lokal.Bobot_JP;
+      m.close();
+      toast(isEdit ? 'Data diperbarui' : 'Data ditambahkan', D.label(lokal), 'success');
+      simpanLatar({
+        action: D.save, data: v, gagal: 'Data master belum tersimpan',
+        apply() { const arr = D.list(), i = arr.findIndex(x => x[key] === id); if (i > -1) arr[i] = lokal; else arr.push(lokal); bootChanged(); render(true); },
+        done(res) { applyRef(res); },
+        rollback() { Object.assign(S.boot.ref, snap); bootChanged(); },
+        fail(res) { if (res.code !== 'AUTH') openForm(tab, isEdit ? row : null, { v, res }); }
+      });
     };
   }
 
-  function openAsgForm() {
+  function openAsgForm(pre) {
     const staff = staffList().filter(u => u.Status_Aktif === 'Aktif').sort((a, b) => collator.compare(a.Nama_Lengkap, b.Nama_Lengkap));
     const m = openModal({
       title: 'Tambah Penugasan', icon: 'link', sub: 'Hubungkan Gadik ke kelas',
@@ -482,17 +514,24 @@ const MasterPage = (() => {
       foot: '<button class="btn outline" data-close>Batal</button><button class="btn primary" id="pg-save">' + icon('save') + 'Simpan Penugasan</button>'
     });
     const form = m.$('#pg');
+    if (pre) { isiForm(form, pre.v); showServerError(form, pre.res, '#pg-alert'); }
     m.$('#pg-save').onclick = async () => {
       clearErrors(form);
       const v = formValues(form);
       if (!v.ID_User) return fieldError(form, 'ID_User', 'Pilih Gadik.');
       if (!v.ID_Kelas) return fieldError(form, 'ID_Kelas', 'Pilih kelas.');
-      const done = busy(m.$('#pg-save'), 'Menyimpan…');
-      const res = await api('penugasanSave', v);
-      done();
-      if (!res.success) return showServerError(form, res, '#pg-alert');
-      applyUsers(res.data); m.close(); render(true);
-      toast('Penugasan ditambahkan', '');
+      const u = staffList().find(x => x.ID_User === v.ID_User);
+      if (u && u.penugasan.some(a => a.ID_Kelas === v.ID_Kelas)) return fieldError(form, 'ID_Kelas', 'Penugasan ini sudah ada.');
+      const old = u ? u.penugasan.slice() : null;
+      m.close();
+      toast('Penugasan ditambahkan', (u ? u.Nama_Lengkap + ' → ' : '') + kelasName(v.ID_Kelas), 'success');
+      simpanLatar({
+        action: 'penugasanSave', data: v, gagal: 'Penugasan belum tersimpan',
+        apply() { if (u) u.penugasan.push({ ID_Penugasan: tmpId('PNG'), ID_Kelas: v.ID_Kelas, ID_Peleton: '', _pending: true }); render(true); },
+        done(res) { applyUsers(res.data); render(true); },
+        rollback() { if (u) u.penugasan = old; render(true); },
+        fail(res) { if (res.code !== 'AUTH') openAsgForm({ v, res }); }
+      });
     };
   }
 
@@ -611,7 +650,7 @@ window.JadwalAdmin = (() => {
         const cell = list.filter(j => jadwalAktif(j, t) && j.Jam_Mulai === a && j.Jam_Selesai === b);
         h += '<div class="mc' + (t === today ? ' today' : '') + '">' + cell.map(j => {
           const c = conf[j.ID_Jadwal], ke = tanggalJadwal(j).indexOf(t) + 1, sabtuAwal = j.Tutup_Jumat === 'Ya' && hariOf(t) === 'Sabtu';
-          return '<button class="slot' + (c ? ' clash' : '') + '" data-open="' + esc(j.ID_Jadwal) + '"><span class="code">' + (c ? '⚠ BENTROK ' + (c[0].why === 'GADIK' ? 'GADIK' : 'KELAS') + (ke ? ' • HARI ' + ke : '') : (ke ? 'HARI ' + ke : 'MINGGUAN')) + '</span><b>' + esc(mapelName(j.ID_Mapel)) + '</b><small>' + icon('user', 'sm') + esc(gadikName(j.ID_Gadik)) + '</small>' + (j.Ruang ? '<small>' + icon('map-pin', 'sm') + esc(j.Ruang) + '</small>' : '') + (sabtuAwal ? '<small class="slot-note">Penutupan Jumat — nilai diisi Jumat</small>' : '') + '</button>';
+          return '<button class="slot' + (c ? ' clash' : '') + (j._pending ? ' pending' : '') + '" data-open="' + esc(j.ID_Jadwal) + '"><span class="code">' + (c ? '⚠ BENTROK ' + (c[0].why === 'GADIK' ? 'GADIK' : 'KELAS') + (ke ? ' • HARI ' + ke : '') : (ke ? 'HARI ' + ke : 'MINGGUAN')) + '</span><b>' + esc(mapelName(j.ID_Mapel)) + '</b><small>' + icon('user', 'sm') + esc(gadikName(j.ID_Gadik)) + '</small>' + (j.Ruang ? '<small>' + icon('map-pin', 'sm') + esc(j.Ruang) + '</small>' : '') + (sabtuAwal ? '<small class="slot-note">Penutupan Jumat — nilai diisi Jumat</small>' : '') + '</button>';
         }).join('') + '</div>';
       });
     });
@@ -628,7 +667,7 @@ window.JadwalAdmin = (() => {
       return;
     }
     const o = e.target.closest('[data-open]');
-    if (o) { e.preventDefault(); const j = S.boot.jadwal.find(x => x.ID_Jadwal === o.dataset.open); if (j) openForm(j); return; }
+    if (o) { e.preventDefault(); const j = S.boot.jadwal.find(x => x.ID_Jadwal === o.dataset.open); if (j && j._pending) { toast('Sedang disimpan', 'Jadwal ini sedang disimpan ke server. Coba sebentar lagi.', 'info'); return; } if (j) openForm(j); return; }
     const w = e.target.closest('[data-wk]');
     if (w) { const n = Number(w.dataset.wk); st.wk = n ? addDays(st.wk, n) : senin(todayStr()); render(); return; }
     const g = e.target.closest('[data-goto-wk]');
@@ -761,6 +800,30 @@ window.JadwalAdmin = (() => {
       if (menit(v.Jam_Selesai) > menit(JADWAL.JAM_SELESAI)) return fieldError(form, 'Jam_Selesai', 'Paling lambat pukul 17.00.');
       if (menit(v.Jam_Selesai) <= menit(v.Jam_Mulai)) return fieldError(form, 'Jam_Selesai', 'Jam selesai harus setelah jam mulai.');
       if (isEdit) v.ID_Jadwal = j.ID_Jadwal;
+      const rekam = Object.assign({}, v, { ID_Jadwal: isEdit ? j.ID_Jadwal : tmpId('JDW'), Hari: v.Hari.join(','), Tutup_Jumat: v.Tutup_Jumat ? 'Ya' : '', Ruang: v.Ruang || '' });
+      if (!clashText(rekam).length) {
+        // Tidak ada bentrok → simpan di latar: matriks jadwal langsung diperbarui, server menyusul.
+        const snap = S.boot.jadwal.slice();
+        m.close();
+        st.kelas = v.ID_Kelas; st.wk = senin(v.Tanggal_Mulai);
+        toast(isEdit ? 'Jadwal diperbarui' : 'Jadwal ditambahkan', mapelName(v.ID_Mapel) + ' • ' + rentangJadwal(rekam), 'success');
+        simpanLatar({
+          action: 'jadwalSave', data: v, gagal: 'Jadwal belum tersimpan',
+          apply() { const i = S.boot.jadwal.findIndex(x => x.ID_Jadwal === rekam.ID_Jadwal); rekam._pending = true; if (i > -1) S.boot.jadwal[i] = rekam; else S.boot.jadwal.push(rekam); bootChanged(); render(); },
+          done(res) {
+            S.boot.jadwal = res.data.jadwal; bootChanged(); if (!_modals.length) render();
+            if (res.data.penugasanBaru) { toast('Penugasan ditambahkan otomatis', gadikName(v.ID_Gadik) + ' kini ditugaskan di ' + kelasName(v.ID_Kelas) + ' agar dapat menginput nilai mapel ini.', 'info'); loadUsers(() => {}, true); }
+          },
+          rollback() { S.boot.jadwal = snap; bootChanged(); if (!_modals.length) render(); },
+          fail(res) {
+            if (res.code === 'AUTH') return;
+            const isi = Object.assign({}, rekam); delete isi._pending;
+            if (isEdit) openForm(Object.assign({}, j, isi, { ID_Jadwal: j.ID_Jadwal })); else { delete isi.ID_Jadwal; openForm(null, isi); }
+            const f = $('#jf'); if (f) showServerError(f, res, '#jf-alert');
+          }
+        });
+        return;
+      }
       const done = busy(m.$('#jf-save'), 'Menyimpan…');
       let res = await api('jadwalSave', v);
       if (!res.success && res.code === 'CONFLICT') {
