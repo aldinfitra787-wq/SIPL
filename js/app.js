@@ -143,9 +143,13 @@ function setActiveNav(name) {
 Bus.on('route', setActiveNav);
 
 function fillUser() {
-  const me = S.me, ini = initials(me.Nama_Lengkap);
-  $('#side-avatar').textContent = ini;
-  $('#top-avatar').textContent = ini;
+  const me = S.me, ini = initials(me.Nama_Lengkap), foto = fotoData(me.ID_User, me.Foto_Ver);
+  ['#side-avatar', '#top-avatar'].forEach(sel => {
+    const av = $(sel); if (!av) return;
+    av.dataset.foto = me.ID_User; av.dataset.ini = ini;
+    av.classList.toggle('has-foto', !!foto);
+    av.innerHTML = foto ? '<img src="' + foto + '" alt="" decoding="async">' : esc(ini);
+  });
   $('#side-name').textContent = me.Nama_Lengkap;
   $('#side-sub').textContent = me.NRP ? 'NRP ' + me.NRP : '@' + me.Username;
   $('#top-name').textContent = me.Nama_Lengkap;

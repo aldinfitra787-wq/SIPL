@@ -752,3 +752,131 @@ table.sheet .miss { color: var(--faint); font-weight: 500; }
   .login-logo { display: none; }
   .login-form .field label { margin-bottom: 3px; font-size: 13px; }
 }
+
+/* ==========================================================================
+   v1.6 — Pas foto 4×6, Dokumen Jadwal (PDF)
+   ========================================================================== */
+.mb-24 { margin-bottom: 24px; }
+.avatar.has-foto { background: #fff; overflow: hidden; padding: 0; box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--gold); }
+.avatar.has-foto img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 18%; display: block; }
+.avatar.pf-mini { width: 48px; height: 72px; border-radius: 8px; font-size: 15px; }
+.avatar.pf-big { width: 120px; height: 180px; border-radius: 12px; font-size: 34px; box-shadow: 0 10px 26px -14px rgba(92, 20, 20, .55); }
+.avatar.pf-mini.has-foto, .avatar.pf-big.has-foto { box-shadow: 0 0 0 3px #fff, 0 0 0 4px var(--gold), 0 10px 22px -14px rgba(0, 0, 0, .5); }
+.pf-chip { display: inline-flex; align-items: center; gap: 12px; padding: 8px 14px 8px 8px; border: 1px solid var(--border); border-radius: 14px; background: #fff; cursor: pointer; text-align: left; transition: border-color .2s, box-shadow .2s, transform .2s; }
+.pf-chip:hover { border-color: var(--gold); box-shadow: var(--sh-2); transform: translateY(-1px); }
+.pf-chip b { display: block; font-size: 14px; } .pf-chip small { display: block; font-size: 12px; color: var(--muted); }
+.pf-body { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
+.pf-body > div:last-child { flex: 1 1 240px; }
+.pf-wrap { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+.pf-frame { width: 160px; height: 240px; flex: none; border-radius: 12px; overflow: hidden; border: 2px dashed var(--border-2); background: var(--surface-2); display: grid; place-items: center; position: relative; }
+.pf-frame img { width: 100%; height: 100%; object-fit: cover; display: block; animation: fadeIn .35s ease both; }
+.pf-frame::after { content: '4 × 6'; position: absolute; right: 6px; bottom: 6px; font: 700 10px/1 var(--mono); letter-spacing: .08em; color: #fff; background: rgba(28, 25, 23, .55); padding: 4px 6px; border-radius: 6px; }
+.pf-kosong { display: grid; justify-items: center; gap: 6px; color: var(--faint); font: 700 12px/1 var(--mono); }
+.pf-kosong .ico { width: 44px; height: 44px; }
+.pf-side { flex: 1 1 240px; min-width: 0; }
+.pf-side input[type=range] { width: 100%; accent-color: var(--gold); }
+
+.dok-sum-t { font-size: 16.5px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.dok-sum .icon-tile, .dok-card .icon-tile { background: #FDECEC; color: #B42318; }
+.dok-hero { width: 100%; display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: 1px solid #F3D0D0; border-radius: 14px; background: linear-gradient(120deg, #FFF6F6, #fff 60%); cursor: pointer; text-align: left; transition: transform .2s, box-shadow .2s, border-color .2s; }
+.dok-hero:hover { transform: translateY(-2px); box-shadow: var(--sh-2); border-color: #E7A5A5; }
+.dok-hero-ic { width: 46px; height: 46px; border-radius: 12px; background: #B42318; color: #fff; display: grid; place-items: center; flex: none; }
+.dok-hero-ic .ico { width: 24px; height: 24px; }
+.dok-hero b { display: block; font-size: 15.5px; margin-top: 4px; } .dok-hero small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.dok-hero-go { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--bur-3); font-size: 13.5px; }
+.dok-list { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.modal .dok-list { margin: 0; }
+.dok-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: #fff; transition: border-color .2s, background .2s; }
+.dok-item:hover { border-color: #EBC4C4; background: #FFFBFB; }
+.dok-item b { display: block; font-size: 14px; } .dok-item small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.dok-ic { width: 36px; height: 36px; border-radius: 10px; background: #FDECEC; color: #B42318; display: grid; place-items: center; flex: none; }
+.dok-ic .ico { width: 20px; height: 20px; }
+.modal.pdf { max-width: min(1080px, 96vw); height: calc(100vh - 40px); }
+.modal.pdf .modal-body { flex: 1; padding: 0; }
+.pdf-box { flex: 1; display: flex; min-height: 0; background: #525659; }
+.pdf-box .hp-load { color: #eee; margin: auto; }
+.pdf-box > .alert { margin: 18px; }
+.pdf-frame { flex: 1; width: 100%; height: 100%; min-height: 60vh; border: 0; background: #525659; }
+.pdf-hp { margin: auto; text-align: center; color: #fff; padding: 28px 20px; display: grid; justify-items: center; gap: 6px; width: 100%; max-width: 320px; }
+.pdf-hp .ico { width: 56px; height: 56px; color: #ffb4b4; }
+.pdf-hp .muted { color: #ddd !important; }
+@media (max-width: 1180px) { .grid.c4.dash-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 720px) { .grid.c4.dash-sum { grid-template-columns: minmax(0, 1fr); } .modal.pdf { height: auto; } .pdf-box { min-height: 260px; } }
+
+/* ==========================================================================
+   v1.6 — Animasi halus & elegan (dimatikan otomatis bila pengguna memilih "kurangi gerakan")
+   ========================================================================== */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes riseIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes slideL { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+@keyframes zoomSoft { from { opacity: 0; transform: scale(1.03); } to { opacity: 1; transform: none; } }
+@keyframes sheen { from { transform: translateX(-120%) skewX(-18deg); } to { transform: translateX(220%) skewX(-18deg); } }
+@keyframes goldLine { from { background-position: 0 -100%; } to { background-position: 0 200%; } }
+@keyframes pulseRing { 0% { box-shadow: 0 0 0 0 rgba(200, 152, 30, .45); } 100% { box-shadow: 0 0 0 12px rgba(200, 152, 30, 0); } }
+:root { --ease-out: cubic-bezier(.2, .75, .25, 1); }
+
+/* Masuk halaman: kepala halaman, lalu kartu & tabel muncul berurutan */
+.page.pg-in > .page-head { animation: riseIn .5s var(--ease-out) both; }
+.page.pg-in > :not(.page-head) { animation: riseIn .55s var(--ease-out) both; animation-delay: .08s; }
+.page.pg-in > :nth-child(3) { animation-delay: .14s; } .page.pg-in > :nth-child(4) { animation-delay: .2s; }
+.page.pg-in > :nth-child(5) { animation-delay: .26s; } .page.pg-in > :nth-child(n+6) { animation-delay: .32s; }
+.page.pg-in .grid > * { animation: riseIn .55s var(--ease-out) both; }
+.page.pg-in .grid > :nth-child(1) { animation-delay: .1s; } .page.pg-in .grid > :nth-child(2) { animation-delay: .17s; }
+.page.pg-in .grid > :nth-child(3) { animation-delay: .24s; } .page.pg-in .grid > :nth-child(4) { animation-delay: .31s; }
+.page.pg-in .grid > :nth-child(n+5) { animation-delay: .38s; }
+.page.pg-in table.dt tbody tr { animation: fadeIn .45s ease both; }
+.page.pg-in table.dt tbody tr:nth-child(-n+12) { animation: riseIn .45s var(--ease-out) both; }
+.page.pg-in table.dt tbody tr:nth-child(2) { animation-delay: .04s; } .page.pg-in table.dt tbody tr:nth-child(3) { animation-delay: .08s; }
+.page.pg-in table.dt tbody tr:nth-child(4) { animation-delay: .12s; } .page.pg-in table.dt tbody tr:nth-child(5) { animation-delay: .16s; }
+.page.pg-in table.dt tbody tr:nth-child(6) { animation-delay: .2s; } .page.pg-in table.dt tbody tr:nth-child(n+7) { animation-delay: .24s; }
+
+/* Kartu & pintasan: terangkat halus saat disorot */
+.card, .stat, .shortcut, .session { transition: transform .25s var(--ease-out), box-shadow .25s var(--ease-out), border-color .25s; }
+@media (hover: hover) {
+  .stat:hover, .dash-sum > .card:hover, .kelas-card:hover { transform: translateY(-3px); box-shadow: var(--sh-2); }
+  .shortcut:hover { transform: translateY(-4px); }
+  .session:hover { transform: translateX(3px); }
+}
+.stat::after { content: ''; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, .55) 45%, transparent 60%); transform: translateX(-120%) skewX(-18deg); pointer-events: none; }
+.page.pg-in .stat::after { animation: sheen 1.4s .5s ease-out 1; }
+
+/* Tombol: kilau emas lembut saat disorot, tekan terasa */
+.btn { transition: background .2s, color .2s, border-color .2s, box-shadow .2s, transform .12s; }
+.btn:active:not([disabled]) { transform: scale(.975); }
+.btn.primary { position: relative; overflow: hidden; }
+.btn.primary::after { content: ''; position: absolute; top: 0; bottom: 0; width: 40%; left: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .35), transparent); transform: translateX(-120%) skewX(-18deg); pointer-events: none; }
+@media (hover: hover) { .btn.primary:hover:not([disabled])::after { animation: sheen .8s ease-out 1; } }
+
+/* Navigasi: garis aktif mengalir, ikon bergeser halus */
+#nav a { transition: background .25s, color .25s, padding-left .25s var(--ease-out); }
+#nav a .ico { transition: transform .25s var(--ease-out); }
+@media (hover: hover) { #nav a:hover .ico { transform: translateX(2px) scale(1.06); } }
+#nav a.active { animation: fadeIn .3s ease; }
+
+/* Progres & angka */
+.progress > span { transition: width .9s var(--ease-out); }
+.count-up { font-variant-numeric: tabular-nums; }
+
+/* Toast & modal: masuk lebih lembut */
+.overlay { animation: fadeIn .2s ease both; }
+.modal { animation: riseIn .32s var(--ease-out) both; }
+
+/* Halaman login: formulir meluncur, gambar muncul perlahan, garis emas berkilau */
+.login:not([hidden]) .login-art picture { animation: fadeIn .9s ease both; }
+.login:not([hidden]) .login-card > * { animation: slideL .6s var(--ease-out) both; }
+.login:not([hidden]) .login-card > :nth-child(2) { animation-delay: .1s; }
+.login:not([hidden]) .login-foot { animation: fadeIn .8s .35s ease both; }
+.login:not([hidden]) .login-form > * { animation: riseIn .5s var(--ease-out) both; }
+.login:not([hidden]) .login-form > :nth-child(2) { animation-delay: .16s; } .login:not([hidden]) .login-form > :nth-child(3) { animation-delay: .22s; }
+.login:not([hidden]) .login-form > :nth-child(4) { animation-delay: .28s; } .login:not([hidden]) .login-form > :nth-child(5) { animation-delay: .34s; }
+.login-side::before { content: ''; position: absolute; left: -4px; top: 0; bottom: 0; width: 4px; background: linear-gradient(180deg, transparent, #FFE7A3, transparent) 0 -100% / 100% 40% no-repeat; animation: goldLine 4.5s 1s ease-in-out infinite; pointer-events: none; }
+.login-logo { animation: pulseRing 2.4s 1.2s ease-out 2; }
+@media (max-width: 899px) and (min-height: 471px), (max-width: 599px) {
+  .login-side::before { left: 0; right: 0; top: -4px; bottom: auto; height: 4px; width: auto; background: linear-gradient(90deg, transparent, #FFE7A3, transparent) -100% 0 / 40% 100% no-repeat; animation-name: goldLineX; }
+}
+@keyframes goldLineX { from { background-position: -100% 0; } to { background-position: 200% 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; animation-delay: 0s !important; transition-duration: .001ms !important; }
+}
+.dash-sum > .card > .row.between { flex-wrap: nowrap; gap: 10px; align-items: flex-start; }

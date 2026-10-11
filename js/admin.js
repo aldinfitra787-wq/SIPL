@@ -48,13 +48,14 @@ const PersonelPage = (() => {
     table = new Table($('#pr-table', el), {
       key: 'ID_User', unit: 'akun', pageSize: 25, sort: { key: 'Nama_Lengkap', dir: 'asc' },
       columns: [
-        { key: 'Nama_Lengkap', label: 'Nama Lengkap', cls: 'card-title', render: u => '<div class="t-person"><div class="avatar sm' + (u.Status_Aktif !== 'Aktif' ? ' red' : '') + '">' + esc(initials(u.Nama_Lengkap)) + '</div><div class="t-name"><b>' + esc(u.Nama_Lengkap) + (u.Status_Aktif !== 'Aktif' ? ' <span class="badge off">Nonaktif</span>' : '') + '</b><small class="mono">@' + esc(u.Username) + '</small></div></div>' },
+        { key: 'Nama_Lengkap', label: 'Nama Lengkap', cls: 'card-title', render: u => '<div class="t-person">' + avatarAkun(u, 'sm' + (u.Status_Aktif !== 'Aktif' ? ' red' : '')) + '<div class="t-name"><b>' + esc(u.Nama_Lengkap) + (u.Status_Aktif !== 'Aktif' ? ' <span class="badge off">Nonaktif</span>' : '') + '</b><small class="mono">@' + esc(u.Username) + '</small></div></div>' },
         { key: 'NRP', label: 'Pangkat / NRP', render: u => esc(u.Pangkat || '—') + '<div><span class="nrp">' + esc(u.NRP || '—') + '</span></div>' },
         { key: 'Role', label: 'Peran', render: u => roleBadge(u.Role) },
         { key: 'asg', label: 'Penugasan', sort: u => u.penugasan.length ? kelasName(u.penugasan[0].ID_Kelas) : '', render: u => asgText(u.penugasan) },
         { key: 'acts', label: 'Aksi', sort: false, cls: 'acts-cell', render: u => '<div class="acts">' +
           (u.Status_Aktif !== 'Aktif' ? '<button class="btn outline xs" data-act="aktifkan" title="Akun ini dinonaktifkan di versi lama">' + icon('power', 'sm') + 'Aktifkan</button>' : '') +
           '<button class="btn icon" data-act="edit" title="Ubah akun">' + icon('edit') + '</button>' +
+          '<button class="btn icon" data-act="foto" title="Pas foto 4×6">' + icon('camera') + '</button>' +
           '<button class="btn icon" data-act="pw" title="Reset password">' + icon('key') + '</button>' +
           '<button class="btn icon red" data-act="del" title="Hapus akun">' + icon('trash') + '</button></div>' }
       ],
@@ -64,6 +65,7 @@ const PersonelPage = (() => {
         if (!u) return;
         if (act === 'edit') go('akun/' + encodeURIComponent(id));
         if (act === 'pw') resetPassword(u);
+        if (act === 'foto') pilihPasFoto(u).then(v => { if (v !== null) render(true); });
         if (act === 'aktifkan') aktifkan(u);
         if (act === 'del') remove(u);
       }
@@ -169,7 +171,9 @@ const AkunForm = (() => {
         eyebrow: 'Formulir Otorisasi // Administrator Satdik',
         title: isNew ? 'Tambah Akun & Penugasan Personel' : 'Ubah Akun Personel',
         desc: 'Isi identitas, kredensial login, dan kelas/peleton yang diampu. Akses data dibatasi otomatis oleh server sesuai penugasan.',
-        chips: '<span class="chip ' + (isNew ? '' : 'line') + '">' + (isNew ? 'Mode: registrasi baru' : 'Mode: ubah @' + esc(u.Username)) + '</span>'
+        chips: '<span class="chip ' + (isNew ? '' : 'line') + '">' + (isNew ? 'Mode: registrasi baru' : 'Mode: ubah @' + esc(u.Username)) + '</span>',
+        actions: isNew ? '<span class="small muted" style="max-width:220px">Pas foto 4×6 dapat ditambahkan setelah akun disimpan.</span>'
+          : '<button type="button" class="pf-chip" id="af-foto" title="Ganti pas foto 4×6">' + avatarAkun(u, 'pf-mini') + '<span><b>Pas Foto 4×6</b><small>Klik untuk mengganti</small></span></button>'
       }) +
       '<form id="af" novalidate>' +
       '<div id="af-alert" class="alert red" hidden style="margin-bottom:16px"></div>' +
@@ -216,6 +220,7 @@ const AkunForm = (() => {
       bindStrength($('#af-pw', el), $('#af-meter', el), $('#af-meter-t', el));
     }
     form.addEventListener('submit', e => { e.preventDefault(); submit(form, isNew); });
+    const fb = $('#af-foto', el); if (fb) fb.onclick = () => pilihPasFoto(u);
     syncRole();
   }
 
@@ -365,7 +370,7 @@ const MasterPage = (() => {
         { key: 'acts', label: 'Aksi', sort: false, cls: 'acts-cell', render: r => actBtns(r) }
       ],
       penugasan: [
-        { key: 'Nama', label: 'Personel', cls: 'card-title', render: r => '<div class="t-person"><div class="avatar sm">' + esc(initials(r.Nama)) + '</div><div class="t-name"><b>' + esc(r.Nama) + '</b><small class="mono">@' + esc(r.Username) + '</small></div></div>' },
+        { key: 'Nama', label: 'Personel', cls: 'card-title', render: r => '<div class="t-person">' + avatarAkun({ ID_User: r.ID_User, Nama_Lengkap: r.Nama, Foto_Ver: r.Foto_Ver }, 'sm') + '<div class="t-name"><b>' + esc(r.Nama) + '</b><small class="mono">@' + esc(r.Username) + '</small></div></div>' },
         { key: 'Role', label: 'Peran', render: r => roleBadge(r.Role) },
         { key: 'kelas', label: 'Kelas', sort: r => kelasName(r.ID_Kelas, true), render: r => esc(kelasName(r.ID_Kelas, true)) },
         { key: 'pel', label: 'Peleton', sort: r => pelName(r.ID_Peleton), render: r => r.Role === 'Gadik' ? '<span class="faint">Seluruh kelas</span>' : (r.ID_Peleton ? esc(pelName(r.ID_Peleton)) : '<span class="faint">Semua peleton</span>') },
@@ -393,7 +398,7 @@ const MasterPage = (() => {
     else {
       if (!usersData()) { $('#ms-table', el).innerHTML = skeletonRows(5, 4); loadUsers(e => { if (e) $('#ms-table', el).innerHTML = errorState(e.message); else render(true); }); return; }
       rows = [];
-      staffList().forEach(u => u.penugasan.forEach(a => rows.push({ ID_Penugasan: a.ID_Penugasan, ID_User: u.ID_User, Nama: u.Nama_Lengkap, Username: u.Username, Role: u.Role, Status_Aktif: u.Status_Aktif, ID_Kelas: a.ID_Kelas, ID_Peleton: a.ID_Peleton })));
+      staffList().forEach(u => u.penugasan.forEach(a => rows.push({ ID_Penugasan: a.ID_Penugasan, ID_User: u.ID_User, Foto_Ver: u.Foto_Ver, Nama: u.Nama_Lengkap, Username: u.Username, Role: u.Role, Status_Aktif: u.Status_Aktif, ID_Kelas: a.ID_Kelas, ID_Peleton: a.ID_Peleton })));
       rows = rows.filter(r => (!st.kelas || r.ID_Kelas === st.kelas) && (!q || norm(r.Nama + ' ' + r.Username + ' ' + kelasName(r.ID_Kelas, true)).indexOf(q) > -1));
     }
     table.set(rows, keep);
@@ -546,6 +551,7 @@ window.JadwalAdmin = (() => {
       (pairs.length ? '<div class="notice red"><div class="icon-tile">' + icon('alert-triangle') + '</div><div class="grow"><b>' + pairs.length + ' bentrok jadwal terdeteksi</b>' +
         pairs.slice(0, 4).map(p => { const a = J(p.a), b = J(p.b); return '<p>' + (p.why === 'GADIK' ? 'Gadik <b>' + esc(gadikName(a.ID_Gadik)) + '</b> mengajar ' + esc(kelasName(a.ID_Kelas)) + ' dan ' + esc(kelasName(b.ID_Kelas)) : '<b>' + esc(kelasName(a.ID_Kelas)) + '</b>: ' + esc(mapelName(a.ID_Mapel)) + ' dan ' + esc(mapelName(b.ID_Mapel))) + ' pada ' + esc(rentangJadwal(a)) + ' ' + esc(fmt.jam(a.Jam_Mulai)) + '–' + esc(fmt.jam(a.Jam_Selesai)) + ' <a href="javascript:void 0" data-open="' + esc(p.a) + '">Selesaikan →</a></p>'; }).join('') +
         (pairs.length > 4 ? '<p>dan ' + (pairs.length - 4) + ' bentrok lainnya (lihat tampilan Daftar).</p>' : '') + '</div></div>' : '') +
+      dokumenKartu({ admin: true, cls: 'mb-24' }) +
       '<div class="card">' + (st.view === 'matrix' ? matrixHtml(kel, conf) : '<div class="toolbar">' +
         '<div class="field"><label>Kelas</label><select class="select" id="jl-kelas">' + options(kel, 'ID_Kelas', k => k.Nama_Kelas + ' — ' + k.Nama_Angkatan, st.fKelas, 'Semua kelas') + '</select></div>' +
         '<div class="field"><label>Gadik</label><select class="select" id="jl-gadik">' + options(S.boot.ref.gadik.slice().sort((a, b) => collator.compare(a.Nama_Lengkap, b.Nama_Lengkap)), 'ID_Gadik', g => g.Nama_Lengkap, st.fGadik, 'Semua Gadik') + '</select></div>' +
@@ -629,6 +635,14 @@ window.JadwalAdmin = (() => {
   }
 
   function onClick(e) {
+    if (e.target.closest('[data-dok-baru]')) return formDokumen(null);
+    const du = e.target.closest('[data-dok-ubah]'); if (du) return formDokumen(dokumenList().find(x => x.ID_Dokumen === du.dataset.dokUbah));
+    const dh = e.target.closest('[data-dok-hapus]');
+    if (dh) {
+      const d = dokumenList().find(x => x.ID_Dokumen === dh.dataset.dokHapus);
+      if (d) hapusData('dokumen', d.ID_Dokumen, { judul: 'Hapus dokumen jadwal?', nama: d.Judul + ' (PDF)', utama: 'Dokumen_Jadwal' }).then(r => { if (r) render(); });
+      return;
+    }
     const o = e.target.closest('[data-open]');
     if (o) { e.preventDefault(); const j = S.boot.jadwal.find(x => x.ID_Jadwal === o.dataset.open); if (j) openForm(j); return; }
     const w = e.target.closest('[data-wk]');
@@ -645,6 +659,55 @@ window.JadwalAdmin = (() => {
       return c.why === 'GADIK' ? 'Gadik ' + gadikName(j.ID_Gadik) + ' sudah mengajar ' + mapelName(j.ID_Mapel) + ' di ' + kelasName(j.ID_Kelas) + ' pada ' + rentangJadwal(j) + ' ' + fmt.jam(j.Jam_Mulai) + '–' + fmt.jam(j.Jam_Selesai) + '.'
         : kelasName(j.ID_Kelas) + ' sudah ada ' + mapelName(j.ID_Mapel) + ' pada ' + rentangJadwal(j) + ' ' + fmt.jam(j.Jam_Mulai) + '–' + fmt.jam(j.Jam_Selesai) + '.';
     });
+  }
+
+  /** Unggah / ubah dokumen Jadwal Pelatihan (PDF) yang tampil di dashboard Gadik & Pengasuh. */
+  function formDokumen(d) {
+    const isEdit = !!d;
+    const m = openModal({
+      title: isEdit ? 'Ubah Dokumen Jadwal' : 'Unggah Jadwal Pelatihan (PDF)', icon: 'file-pdf', sub: 'Tampil di dashboard Gadik & Pengasuh',
+      body: '<form id="df" class="form-grid" novalidate><div id="df-alert" class="alert red span-all" hidden></div>' +
+        '<div class="field span-all"><label>Judul dokumen <span class="req">*</span></label><input name="Judul" class="input" maxlength="120" placeholder="Contoh: Jadwal Pelatihan Gelombang I 2026" value="' + esc(d ? d.Judul : '') + '"></div>' +
+        '<div class="field span-all"><label>Ditujukan untuk</label><select name="ID_Kelas" class="select">' + options(kelasList(), 'ID_Kelas', k => k.Nama_Kelas + ' — ' + k.Nama_Angkatan, d ? d.ID_Kelas : '', 'Semua kelas (umum)') + '</select><div class="hint">Gadik & Pengasuh hanya melihat dokumen umum dan dokumen kelas penugasannya.</div></div>' +
+        '<label class="drop span-all" id="df-drop"><input type="file" id="df-file" accept="application/pdf,.pdf" hidden><div class="icon-tile">' + icon('file-pdf') + '</div><b id="df-file-t">' + (isEdit ? 'Ganti berkas PDF (opsional)' : 'Pilih berkas PDF atau seret ke sini') + '</b><div class="hint mt-8">' + (isEdit ? 'Saat ini: ' + esc(d.Nama_Berkas) + ' • ' + esc(ukuranTeks(d.Ukuran)) : 'Format PDF, maksimal 10 MB') + '</div></label>' +
+        '</form>',
+      foot: '<button class="btn outline" data-close>Batal</button><button class="btn primary" id="df-save">' + icon('upload') + (isEdit ? 'Simpan' : 'Unggah') + '</button>'
+    });
+    let picked = null;
+    const form = m.$('#df'), file = m.$('#df-file'), drop = m.$('#df-drop'), alert = t => { const a = m.$('#df-alert'); a.hidden = !t; a.innerHTML = t ? icon('alert-circle') + '<div>' + esc(t) + '</div>' : ''; };
+    const pick = f => {
+      alert('');
+      if (!f) return;
+      if (f.type !== 'application/pdf' && !/\.pdf$/i.test(f.name)) { picked = null; return alert('Berkas harus berformat PDF.'); }
+      if (f.size > 10 * 1024 * 1024) { picked = null; return alert('Ukuran ' + ukuranTeks(f.size) + ' melebihi batas 10 MB.'); }
+      picked = f;
+      m.$('#df-file-t').textContent = f.name + ' • ' + ukuranTeks(f.size);
+      const j = form.querySelector('[name=Judul]'); if (!j.value) j.value = f.name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ');
+    };
+    file.onchange = () => pick(file.files[0]);
+    ['dragover', 'dragenter'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+    ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+    drop.addEventListener('drop', e => pick(e.dataTransfer.files[0]));
+    form.addEventListener('submit', e => { e.preventDefault(); m.$('#df-save').click(); });
+    m.$('#df-save').onclick = async () => {
+      clearErrors(form); alert('');
+      const v = formValues(form);
+      if (!v.Judul) return fieldError(form, 'Judul', 'Wajib diisi.');
+      if (!isEdit && !picked) return alert('Pilih berkas PDF jadwal pelatihan.');
+      const done = busy(m.$('#df-save'), picked ? 'Mengunggah…' : 'Menyimpan…');
+      const data = { ID_Dokumen: isEdit ? d.ID_Dokumen : '', Judul: v.Judul, ID_Kelas: v.ID_Kelas };
+      if (picked) {
+        data.Nama_Berkas = picked.name;
+        data.base64 = await new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = no; r.readAsDataURL(picked); });
+      }
+      const res = await api('dokumenUpload', data, { timeout: 180000 });
+      done();
+      if (!res.success) return showServerError(form, res, '#df-alert');
+      S.boot.dokumen = res.data.dokumen; bootChanged();
+      m.close();
+      render();
+      toast(isEdit ? 'Dokumen diperbarui' : 'Jadwal PDF diunggah', v.Judul + ' — kini tampil di dashboard Gadik & Pengasuh.');
+    };
   }
 
   /** Senin terdekat (hari ini bila Senin) — awal blok 6 hari bawaan. */
@@ -744,7 +807,7 @@ window.JadwalAdmin = (() => {
   }
 
   return {
-    show(root) { if (el !== root) { el = root; } else el.removeEventListener('click', onClick); render(); },
+    show(root) { if (el !== root) { el = root; } else el.removeEventListener('click', onClick); bindDokumen(root); render(); },
     onBoot(root) { el = root; if (!_modals.length) { el.removeEventListener('click', onClick); render(); } }
   };
 })();

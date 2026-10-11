@@ -1,8 +1,13 @@
 # Panduan Instalasi SIPL — SPN Polda Papua Barat
 
-**Sistem Informasi Pelatihan** • Versi 1.5.0 (tampilan) • 1.4.0 (server)
+**Sistem Informasi Pelatihan** • Versi 1.6.0
 
 > **Sudah memasang versi sebelumnya (1.0 – 1.3)?** Langsung ke **Bagian G — Memperbarui Versi**. Data Anda tetap aman dan database diperbarui otomatis.
+
+### Yang baru di versi 1.6 — jadwal PDF, pas foto, animasi
+- **Jadwal Pelatihan (PDF)**: Admin mengunggah PDF jadwal di menu **Jadwal Pelajaran**. Dokumen itu tampil sebagai **kartu ringkasan** di dashboard **Gadik** dan **Pengasuh** (tombol *Buka Jadwal PDF* & *Unduh PDF*). Lihat **Bagian J**.
+- **Pas foto 4 × 6 (JPEG/JPG)** untuk akun Admin, Gadik, dan Pengasuh. Foto dipotong otomatis ke ukuran 4 × 6 dan tampil di menu samping, bilah atas, dan daftar personel. Lihat **Bagian K**.
+- **Animasi halus**: halaman muncul perlahan, kartu tampil berurutan, angka statistik menghitung naik, kartu terangkat saat disorot, kilau emas pada tombol, dan formulir login meluncur masuk. Animasi otomatis dimatikan bila perangkat diatur *kurangi gerakan* (aksesibilitas).
 
 ### Yang baru di versi 1.5 — halaman login baru
 - **Halaman login satu layar penuh, tanpa gulir** — di laptop, monitor, tablet, maupun HP (diuji pada 14 ukuran layar, dari 360 × 640 sampai 1920 × 1080).
@@ -286,9 +291,10 @@ Lakukan saat aplikasi sepi (mis. sore hari). Data lama **tidak dihapus**. Langka
 
 **1. Backend**
 1. Buka proyek **SIPL Backend** di script.google.com.
-2. Berkas **Kode** → hapus seluruh isinya → tempel isi `Kode.gs` versi 1.4. Lakukan hal yang sama untuk **Migrasi** (`Migrasi.gs`). Tekan **Ctrl + S**.
+2. Berkas **Kode** → hapus seluruh isinya → tempel isi `Kode.gs` versi terbaru. Lakukan hal yang sama untuk **Migrasi** (`Migrasi.gs`). Tekan **Ctrl + S**.
 3. **Terapkan → Kelola deployment → ✏️ Edit → Versi: Versi baru → Terapkan.** (URL `/exec` tetap sama.)
 4. Database diperbarui **otomatis** pada permintaan pertama (mis. saat ada yang login). Pembaruan ini:
+   - membuat sheet **`Dokumen_Jadwal`** dan **`Foto_Akun`**, serta kolom **`Foto_Ver`** di sheet `Users` (v1.6),
    - menambah kolom **`Tanggal_Mulai`**, **`Tanggal_Selesai`**, **`Tutup_Jumat`** di sheet `Jadwal`,
    - membuat sheet baru **`Sesi_Nilai`** (status tiap sesi penilaian: Draf/Selesai) bila belum ada, dan **`Logo_Aplikasi`** (tempat menyimpan logo),
    - menambah kolom **`Tanggal`**, **`ID_Jadwal`**, dan **`A1 A2 A3 B1 B2 C1 C2`** di sheet `Nilai`,
@@ -387,6 +393,31 @@ Logo dari **Pengaturan** (Cara 1) selalu diutamakan. Urutannya: logo dari Pengat
 
 ---
 
+## Bagian J — Jadwal Pelatihan (PDF) di Dashboard
+
+**Admin mengunggah**
+1. Menu **Jadwal Pelajaran** → kartu **Jadwal Pelatihan** → **Unggah PDF Jadwal**.
+2. Isi **Judul** (terisi otomatis dari nama berkas), pilih **Ditujukan untuk**: *Semua kelas (umum)* atau satu kelas tertentu.
+3. Pilih berkas **PDF** (maks. 10 MB) → **Unggah**.
+
+Tombol ✏️ untuk mengubah judul/kelas atau mengganti berkas, 🗑 untuk menghapus. Berkas disimpan di folder Google Drive **📂 Dokumen Jadwal Pelatihan** (dibuat otomatis saat unggahan pertama) dan **tidak perlu dibagikan publik**: aplikasi mengirimkannya hanya kepada pengguna yang sudah login.
+
+**Gadik & Pengasuh melihat**
+- Dashboard menampilkan kartu ringkasan **Jadwal Pelatihan (PDF)** berisi dokumen terbaru → **Buka Jadwal PDF** (penampil PDF di dalam aplikasi) atau **Unduh PDF**. Bila ada beberapa dokumen, tombol *Semua dokumen* menampilkan daftarnya.
+- Di HP, PDF dibuka dengan penampil PDF bawaan HP (tombol *Buka PDF*).
+- Gadik/Pengasuh hanya melihat dokumen **umum** dan dokumen untuk **kelas penugasannya**. Dokumen yang sama juga tampil di menu **Jadwal Pelajaran** mereka.
+
+---
+
+## Bagian K — Pas Foto 4 × 6
+
+- **Foto sendiri** (Admin, Gadik, Pengasuh): menu **Pengaturan** → kartu **Pas Foto 4 × 6** → **Ganti Pas Foto**.
+- **Foto akun lain** (khusus Admin): **Personel & Akun** → tombol 📷 pada baris akun, atau buka formulir **Ubah akun** → klik kotak **Pas Foto 4×6**.
+
+Ketentuan: format **JPEG/JPG** saja (PNG ditolak). Foto otomatis **dipotong ke rasio 4 × 6 (potret)** dan diperkecil menjadi 400 × 600 piksel sebelum disimpan; geser slider **Geser posisi foto** bila wajah kurang di tengah. Pas foto tampil di menu samping, bilah atas, daftar personel, dan penugasan. Tombol **Hapus Foto** mengembalikan tampilan inisial nama. Menghapus akun ikut menghapus pas fotonya.
+
+---
+
 ## Pemeliharaan (fungsi yang bisa dijalankan dari editor Apps Script)
 
 | Fungsi | Kegunaan |
@@ -423,6 +454,8 @@ Cadangan otomatis tersimpan di folder **Cadangan Harian** (14 salinan terakhir).
 | Jadwal | jadwalkan 1 Gadik di 2 kelas pada pekan yang sama | peringatan bentrok |
 | Penutupan Jumat | centang opsi di jadwal, login Gadik hari Jumat | dashboard menampilkan *Isi nilai Sabtu*; lembar HARI 6 bisa diisi |
 | Unduh | Unduh PDF lembar harian / Rekap Akhir | A4 potrait, kolom tanda tangan Gadik di kanan bawah |
+| Jadwal PDF | Admin unggah PDF jadwal → login Gadik/Pengasuh | kartu *Jadwal Pelatihan (PDF)* di dashboard; PDF bisa dibuka & diunduh |
+| Pas foto | Pengaturan → Ganti Pas Foto (JPG) | foto 4 × 6 tampil di menu & bilah atas; PNG ditolak |
 | Logo | Pengaturan → pilih logo → Simpan Logo | logo tampil di menu, halaman login, dan ikon tab; buka di HP → logo sama |
 | Hapus | Master Data → Mata Pelajaran → 🗑 pada mapel yang sudah dinilai | dialog menampilkan jadwal & nilai yang ikut terhapus; tombol aktif setelah dicentang |
 | Hapus | Personel → 🗑 akun Gadik | jadwal & nilai mapelnya ikut hilang dari Jadwal dan Rekap; Gadik tidak bisa login |
@@ -440,6 +473,9 @@ Cadangan otomatis tersimpan di folder **Cadangan Harian** (14 salinan terakhir).
 | "Koneksi ke server terputus" terus-menerus | Deploy bukan "Siapa saja" / URL salah | Periksa A4; buka URL `/exec` langsung di browser |
 | Situs GitHub 404 | `git init` di folder yang salah | Repo harus menampilkan `index.html` di root; push ulang dari `sipl-frontend` |
 | Tampilan polos tanpa warna | folder `css`/`js` tidak ikut | Jangan unggah lewat "Upload files"; gunakan `git push` |
+| PDF jadwal tidak muncul di dashboard Gadik | dokumen ditujukan untuk kelas lain | Admin: Jadwal → ✏️ dokumen → *Ditujukan untuk* = kelas yang benar atau *Semua kelas* |
+| "Berkas PDF tidak ditemukan di Google Drive" | berkas di folder Dokumen Jadwal terhapus manual | Admin mengunggah ulang berkasnya (✏️ → pilih PDF) |
+| Pas foto ditolak "harus berformat JPEG/JPG" | foto berformat PNG/HEIC | simpan ulang sebagai JPG (mis. dari aplikasi Galeri/Paint) lalu unggah lagi |
 | Logo tidak berganti di perangkat lain | tampilan lama masih tersimpan | muat ulang halaman (**Ctrl + Shift + R**, HP: tutup & buka lagi) |
 | Logo lama (dari v1.2) tidak tampil | domain Google membatasi berbagi tautan publik | unggah ulang logo di **Pengaturan**; versi 1.3 tidak lagi memakai berbagi Drive |
 | "Logo terlalu besar untuk disimpan" | tampilan lama mengirim gambar asli | muat ulang halaman lalu unggah lagi |
@@ -470,4 +506,4 @@ Cadangan otomatis tersimpan di folder **Cadangan Harian** (14 salinan terakhir).
 - **Riwayat perubahan** (login, nilai, kirim ke rekap, buka kunci, akun, jadwal) tetap ditulis ke sheet `Log_Aktivitas` setiap 1 menit untuk audit, tetapi tidak lagi ditampilkan sebagai menu. Setiap baris `Nilai` dan `Nilai_Mental` juga mencatat penginput dan waktunya; `Sesi_Nilai` mencatat siapa dan kapan sesi dikirim ke rekap.
 - **Kuota:** dengan "Jalankan sebagai: Saya", seluruh pengguna memakai kuota akun pemilik (± 30 eksekusi bersamaan). Aplikasi dirancang hemat: cache berlapis, satu panggilan per layar, dan simpan nilai per kelompok.
 - **Repository publik:** kode tampilan di GitHub terlihat publik, tetapi tidak berisi rahasia apa pun. Data hanya bisa dibaca lewat login di server.
-- Aplikasi sudah diuji dengan tiruan layanan Google (382 skenario: login, isolasi kelas, jadwal 6 hari & bentrok per tanggal, penutupan Jumat, PDF/Excel A4 potrait bertanda tangan, hapus berantai semua jenis data, logo, lembar A1–C2, kunci & buka kunci, Rekap Akhir & RANK, berkas unduhan dibuka ulang dengan LibreOffice, bentrok jadwal, simpan otomatis, migrasi, pembaruan otomatis dari v1.0/1.1) dan diperiksa tampilannya di Chromium (desktop & HP). Tetap lakukan **Uji Coba Sebelum Rilis** di atas dengan akun Google asli.
+- Aplikasi sudah diuji dengan tiruan layanan Google (429 skenario: jadwal PDF & pas foto, login, isolasi kelas, jadwal 6 hari & bentrok per tanggal, penutupan Jumat, PDF/Excel A4 potrait bertanda tangan, hapus berantai semua jenis data, logo, lembar A1–C2, kunci & buka kunci, Rekap Akhir & RANK, berkas unduhan dibuka ulang dengan LibreOffice, bentrok jadwal, simpan otomatis, migrasi, pembaruan otomatis dari v1.0/1.1) dan diperiksa tampilannya di Chromium (desktop & HP). Tetap lakukan **Uji Coba Sebelum Rilis** di atas dengan akun Google asli.
