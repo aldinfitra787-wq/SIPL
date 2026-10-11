@@ -12,11 +12,6 @@ const NAV = {
     ['Navigasi Utama', [['dashboard', 'grid', 'Dashboard'], ['peserta', 'cap', 'Peserta Pelatihan'], ['jadwal', 'calendar', 'Jadwal Pelajaran']]],
     ['Penilaian', [['nilai', 'pen', 'Input Nilai Harian'], ['rekap-akhir', 'medal', 'Rekap Akhir']]],
     ['Akun', [['pengaturan', 'settings', 'Pengaturan']]]
-  ],
-  Pengasuh: [
-    ['Navigasi Utama', [['dashboard', 'grid', 'Dashboard'], ['peserta', 'cap', 'Peserta Pelatihan'], ['jadwal', 'calendar', 'Jadwal Pelajaran']]],
-    ['Penilaian', [['mental', 'shield-star', 'Nilai Mental']]],
-    ['Akun', [['pengaturan', 'settings', 'Pengaturan']]]
   ]
 };
 
@@ -57,6 +52,8 @@ function applyBranding() {
   if (login) login.innerHTML = url ? img('Logo SPN Polda Papua Barat') : icon('shield-star');
   const emb = $('#login-emblem');
   if (emb) emb.innerHTML = url ? img('Logo') : icon('shield-star');
+  const lp = $('#lp-logo');
+  if (lp) lp.innerHTML = url ? img('Logo') : icon('shield-star');
   const fav = document.querySelector('link[rel="icon"]');
   if (fav) { if (_favDefault === null) _favDefault = fav.href; fav.href = url || _favDefault; }
 }
@@ -89,6 +86,63 @@ function showLogin(msg) {
   });
 }
 
+// --------------------------------------------------------------------------
+// Progres masuk: layar login diburamkan, logo + persentase 0–100%
+// --------------------------------------------------------------------------
+const LoginProgress = (() => {
+  const KELILING = 2 * Math.PI * 54;              // keliling cincin SVG (r = 54)
+  let el, cur = 0, target = 0, cap = 0, rid = 0, t0 = 0, last = 0, jalan = false;
+  const q = id => $('#' + id);
+  function paint() {
+    const v = Math.round(cur);
+    q('lp-num').textContent = v;
+    q('lp-bar').style.width = cur.toFixed(1) + '%';
+    q('lp-ring').style.strokeDashoffset = (KELILING * (1 - cur / 100)).toFixed(2);
+    el.setAttribute('aria-valuenow', v);
+  }
+  function tick(now) {
+    if (!jalan) return;
+    const dt = Math.min(64, now - (last || now)); last = now;
+    // merayap pelan menuju batas tahap saat menunggu server, lalu mengejar target dengan halus
+    if (cap > target) target = Math.min(cap, target + (cap - target) * dt / 2600);
+    cur += (target - cur) * Math.min(1, dt / (GERAK ? 140 : 1));
+    if (Math.abs(target - cur) < 0.05) cur = target;
+    paint();
+    rid = raf(tick);
+  }
+  function step(pct, label, crawlTo) {
+    target = Math.max(target, pct); cap = Math.max(target, crawlTo || 0);
+    if (label) { const st = q('lp-step'); if (st.textContent !== label) { st.textContent = label; st.classList.remove('swap'); void st.offsetWidth; st.classList.add('swap'); } }
+  }
+  /** Tunggu sampai angka benar-benar mencapai `pct` (agar 100% terlihat sebelum berpindah layar). */
+  function reach(pct) {
+    return new Promise(ok => { const chk = () => (cur >= pct - 0.5 ? ok() : setTimeout(chk, 40)); chk(); });
+  }
+  return {
+    show() {
+      el = q('login-progress');
+      cur = target = cap = 0; last = 0; t0 = Date.now(); paint();
+      el.hidden = false; el.classList.remove('out');
+      $('#login').classList.add('is-loading');
+      raf(() => el.classList.add('on'));
+      if (!jalan) { jalan = true; rid = raf(tick); }
+    },
+    step,
+    async finish(label) {
+      step(100, label);
+      await reach(100);
+      await new Promise(r => setTimeout(r, Math.max(GERAK ? 380 : 120, 1100 - (Date.now() - t0))));
+    },
+    hide(keepLogin) {
+      if (!el) return;
+      jalan = false;
+      el.classList.add('out'); el.classList.remove('on');
+      if (!keepLogin) $('#login').classList.remove('is-loading');
+      setTimeout(() => { el.hidden = true; el.classList.remove('out'); }, GERAK ? 650 : 0);
+    }
+  };
+})();
+
 async function doLogin(e) {
   e.preventDefault();
   const box = $('#login-error'), user = $('#lg-user'), pass = $('#lg-pass');
@@ -99,20 +153,37 @@ async function doLogin(e) {
     return;
   }
   const done = busy($('#lg-submit'), 'Memverifikasi…');
+  const fokus = document.activeElement; if (fokus && fokus.blur) fokus.blur();   // tutup keyboard di HP
+  LoginProgress.show();
+  LoginProgress.step(8, 'Menghubungkan ke server SIPL…', 30);
+  setTimeout(() => LoginProgress.step(18, 'Memverifikasi akun & kata sandi…', 64), 450);
   const res = await api('login', { username: user.value.trim(), password: pass.value }, { tries: 2 });
-  done();
   if (!res.success) {
+    LoginProgress.hide();
+    done();
     box.hidden = false;
     box.innerHTML = icon('alert-triangle') + '<div>' + esc(res.message || 'Gagal masuk.') + '</div>';
     pass.value = ''; pass.focus();
     return;
   }
   const boot = res.data.boot;
+  LoginProgress.step(72, 'Akun terverifikasi • memuat data ' + (boot.me.Role === 'Admin' ? 'satuan pendidikan' : 'kelas Anda') + '…', 80);
   S.token = res.data.token; S.uid = boot.me.ID_User; S.role = boot.me.Role;
   Store.set('session', { token: S.token, uid: S.uid, role: S.role, t: Date.now(), act: Date.now() });
   pass.value = '';
   lastAct = Date.now();
+  if (boot.me.Role === 'Admin' && !window.ADMIN_READY) {
+    LoginProgress.step(82, 'Menyiapkan modul administrator…', 94);
+    try { await loadScript('js/admin.js'); } catch (err) { /* startApp memberi tahu bila gagal */ }
+  } else {
+    LoginProgress.step(86, 'Menyiapkan dashboard ' + boot.me.Role + '…', 94);
+    await new Promise(r => setTimeout(r, 160));
+  }
+  const nama = String(boot.me.Nama_Lengkap || '').split(',')[0];
+  await LoginProgress.finish('Selamat datang, ' + nama);
+  done();
   startApp(boot); S._versiCek = true; setTimeout(cekVersiServer, 1500);
+  LoginProgress.hide(true);
 }
 
 // --------------------------------------------------------------------------
@@ -203,9 +274,9 @@ async function prefetch() {
     // Sesi mengajar hari ini → siapkan data input nilai harian
     const t = todayStr();
     if (S.boot.jadwal.some(j => j.ID_Gadik === S.me.ID_Gadik && jadwalAktif(j, t))) calls = [{ action: 'nilaiHarian', data: { tanggal: t } }];
-  } else if (S.role === 'Pengasuh') calls = [{ action: 'mentalList' }];
+  }
   calls = calls.filter(c => {
-    const key = c.action === 'usersList' ? 'users' : c.action === 'mentalList' ? 'mental' : 'harian:' + c.data.tanggal;
+    const key = c.action === 'usersList' ? 'users' : 'harian:' + c.data.tanggal;
     const cur = Store.get(uk(key), null);
     return !cur || Date.now() - cur.t > 60000;
   });
@@ -215,7 +286,6 @@ async function prefetch() {
   const r = res.data;
   if (r.usersList && r.usersList.success) { cachePut('users', r.usersList.data); if (!S.data.users) S.data.users = r.usersList.data; }
   if (r.nilaiHarian && r.nilaiHarian.success && harianValid(r.nilaiHarian.data)) cachePut('harian:' + r.nilaiHarian.data.tanggal, r.nilaiHarian.data);
-  if (r.mentalList && r.mentalList.success) cachePut('mental', r.mentalList.data);
 }
 
 // --------------------------------------------------------------------------
@@ -295,6 +365,11 @@ window.addEventListener('offline', () => { updateNet(); toast('Koneksi terputus'
     Store.del('session');
     warmUp();
     return showLogin('Sesi berakhir karena tidak ada aktivitas selama ' + Math.round(IDLE_MS / 60000) + ' menit.');
+  }
+  if (!NAV[sess.role]) {                         // peran lama yang sudah dihapus (mis. Pengasuh, v1.7)
+    Store.dropUser(sess.uid); Store.del('session');
+    warmUp();
+    return showLogin('Peran akun ini sudah tidak digunakan di SIPL. Hubungi Admin Satdik.');
   }
   S.token = sess.token; S.uid = sess.uid; S.role = sess.role;
   lastAct = Date.now();

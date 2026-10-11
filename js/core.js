@@ -6,7 +6,7 @@
 
 const CFG = Object.assign({ GAS_URL: '', APP_NAME: 'SIPL — SPN Polda Papua Barat', IDLE_MINUTES: 60, TAHUN_AJARAN: '' }, window.SIPL_CONFIG || {});
 const GAS_URL = String(CFG.GAS_URL || '').trim();
-const FE_VERSION = '1.6.0';              // naikkan bersama ?v= di index.html saat rilis
+const FE_VERSION = '1.7.0';              // naikkan bersama ?v= di index.html saat rilis
 const LS = 'sipl:v1:';
 const TZ = 'Asia/Jayapura';
 const HARI = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
@@ -63,7 +63,7 @@ const Bus = {
 // --------------------------------------------------------------------------
 // Klien API (fetch → GAS /exec, text/plain agar tanpa CORS preflight)
 // --------------------------------------------------------------------------
-const READ_ACTIONS = /^(bootstrap|batch|publicInfo|nilaiHarian|mentalList|rekap|usersList|importScan|dokumenUnduh|foto)$/;
+const READ_ACTIONS = /^(bootstrap|batch|publicInfo|nilaiHarian|rekap|usersList|importScan|dokumenUnduh|foto)$/;
 
 function isConfigured() {
   return /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]{10,}\/exec$/.test(GAS_URL) && GAS_URL.indexOf('GANTI_DENGAN') === -1;

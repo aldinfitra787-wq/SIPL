@@ -4,7 +4,7 @@
    ========================================================================== */
 
 function usersData() { return (S.data.users && S.data.users.users) || null; }
-function staffList() { return (usersData() || []).filter(u => u.Role !== 'Admin'); }
+function staffList() { return (usersData() || []).filter(u => u.Role === 'Gadik'); }
 function asgText(list) {
   if (!list || !list.length) return '<span class="small" style="color:var(--red)">Belum ditugaskan</span>';
   return list.map(a => '<div>' + esc(kelasName(a.ID_Kelas)) + (a.ID_Peleton ? ' <span class="faint">/</span> ' + esc(pelName(a.ID_Peleton)) : '') + '</div>').join('');
@@ -16,7 +16,6 @@ function applyUsers(d) {
   if (d.gadik) S.boot.ref.gadik = d.gadik;
   const us = d.users || [];
   S.boot.stat.gadik = us.filter(u => u.Role === 'Gadik' && u.Status_Aktif === 'Aktif').length;
-  S.boot.stat.pengasuh = us.filter(u => u.Role === 'Pengasuh' && u.Status_Aktif === 'Aktif').length;
   bootChanged();
 }
 function loadUsers(after, force) {
@@ -27,7 +26,7 @@ function loadUsers(after, force) {
 // PERSONEL & AKUN (US-05)
 // ==========================================================================
 const PersonelPage = (() => {
-  const st = { tab: 'all', q: '', kelas: '' };
+  const st = { q: '', kelas: '' };
   let el, table, err = null;
 
   function build(root) {
@@ -36,12 +35,11 @@ const PersonelPage = (() => {
       pageHead({
         eyebrow: 'Personel & Penugasan // Administrator Satdik',
         title: 'Personel & Akun Login',
-        desc: 'Kelola akun login Gadik dan Pengasuh, reset password, serta penugasan kelas dan peleton. Menghapus akun Gadik ikut menghapus jadwal mengajar beserta nilai harian mata pelajarannya.',
+        desc: 'Kelola akun login Gadik (tenaga pendidik), pas foto, reset password, serta penugasan kelas. Menghapus akun Gadik ikut menghapus jadwal mengajar beserta nilai harian mata pelajarannya.',
         actions: '<button class="btn outline" id="pr-refresh">' + icon('refresh') + 'Segarkan</button><a class="btn primary" href="#/akun/baru">' + icon('user-plus') + 'Tambah Akun</a>'
       }) +
       '<div class="grid c4 keep2" id="pr-stats"></div>' +
-      '<div class="tabs mt-24" id="pr-tabs" role="tablist"></div>' +
-      '<div class="card"><div class="toolbar">' +
+      '<div class="card mt-24"><div class="toolbar">' +
         '<div class="field search"><label for="pr-q">Cari personel</label><div class="input-wrap">' + icon('search', 'lead') + '<input id="pr-q" class="input with-lead" placeholder="Nama, NRP, atau username…" autocomplete="off"></div></div>' +
         '<div class="field"><label for="pr-kelas">Penugasan kelas</label><select id="pr-kelas" class="select"></select></div>' +
       '</div><div id="pr-table"></div></div>';
@@ -59,7 +57,7 @@ const PersonelPage = (() => {
           '<button class="btn icon" data-act="pw" title="Reset password">' + icon('key') + '</button>' +
           '<button class="btn icon red" data-act="del" title="Hapus akun">' + icon('trash') + '</button></div>' }
       ],
-      empty: () => emptyState('id-card', 'Belum ada akun', st.q ? 'Tidak ada personel yang cocok.' : 'Tambahkan akun Gadik atau Pengasuh pertama.', st.q ? '' : '<a class="btn primary" href="#/akun/baru">' + icon('user-plus') + 'Tambah Akun</a>'),
+      empty: () => emptyState('id-card', 'Belum ada akun', st.q ? 'Tidak ada personel yang cocok.' : 'Tambahkan akun Gadik pertama.', st.q ? '' : '<a class="btn primary" href="#/akun/baru">' + icon('user-plus') + 'Tambah Akun</a>'),
       onAction: (act, id) => {
         const u = staffList().find(x => x.ID_User === id);
         if (!u) return;
@@ -72,25 +70,22 @@ const PersonelPage = (() => {
     });
     $('#pr-q', el).addEventListener('input', debounce(e => { st.q = e.target.value; render(); }, 250));
     $('#pr-kelas', el).onchange = e => { st.kelas = e.target.value; render(); };
-    $('#pr-tabs', el).addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) { st.tab = b.dataset.tab; render(); } });
     $('#pr-refresh', el).onclick = () => load(true);
     $('#pr-table', el).addEventListener('click', e => { if (e.target.closest('[data-retry]')) load(true); });
   }
 
   function render(keep) {
     const all = staffList(), q = norm(st.q);
-    const n = r => all.filter(u => u.Role === r).length;
+    const mengajar = new Set(S.boot.jadwal.map(j => j.ID_Gadik)), kelasAsg = new Set();
+    all.forEach(u => u.penugasan.forEach(a => kelasAsg.add(a.ID_Kelas)));
     $('#pr-stats', el).innerHTML =
-      stat({ label: 'Total Akun', value: all.length, unit: 'akun', icon: 'users', cap: 'Gadik & Pengasuh terdaftar' }) +
-      stat({ label: 'Gadik', value: n('Gadik'), unit: 'personel', icon: 'book', cap: 'Pengajar mata pelajaran' }) +
-      stat({ label: 'Pengasuh', value: n('Pengasuh'), unit: 'personel', icon: 'shield', cap: 'Pembina peleton' }) +
-      stat({ label: 'Belum Ditugaskan', value: all.filter(u => !u.penugasan.length).length, unit: 'akun', icon: 'alert-triangle', tone: all.some(u => !u.penugasan.length) ? 'red' : '', cap: 'Belum punya penugasan kelas/peleton' });
-    $('#pr-tabs', el).innerHTML = [['all', 'Semua Akun', all.length], ['Gadik', 'Gadik', n('Gadik')], ['Pengasuh', 'Pengasuh', n('Pengasuh')]]
-      .map(t => '<button role="tab" data-tab="' + t[0] + '" class="' + (st.tab === t[0] ? 'on' : '') + '">' + t[1] + '<span class="count">' + t[2] + '</span></button>').join('');
+      stat({ label: 'Total Gadik', value: all.length, unit: 'personel', icon: 'users', cap: 'Akun tenaga pendidik terdaftar' }) +
+      stat({ label: 'Punya Jadwal Mengajar', value: all.filter(u => mengajar.has(u.ID_Gadik)).length, unit: 'gadik', icon: 'book', cap: 'Mengampu mata pelajaran' }) +
+      stat({ label: 'Kelas Terlayani', value: kelasAsg.size, unit: 'kelas', icon: 'building', cap: 'Kelas yang punya Gadik' }) +
+      stat({ label: 'Belum Ditugaskan', value: all.filter(u => !u.penugasan.length).length, unit: 'akun', icon: 'alert-triangle', tone: all.some(u => !u.penugasan.length) ? 'red' : '', cap: 'Belum punya penugasan kelas' });
     $('#pr-kelas', el).innerHTML = options(kelasList(), 'ID_Kelas', k => k.Nama_Kelas + ' — ' + k.Nama_Angkatan, st.kelas, 'Semua kelas');
     if (!usersData()) { $('#pr-table', el).innerHTML = err ? errorState(err.message) : skeletonRows(6, 5); return; }
     table.set(all.filter(u =>
-      (st.tab === 'all' || u.Role === st.tab) &&
       (!st.kelas || u.penugasan.some(a => a.ID_Kelas === st.kelas)) &&
       (!q || norm(u.Nama_Lengkap + ' ' + u.NRP + ' ' + u.Username).indexOf(q) > -1)), keep);
   }
@@ -163,14 +158,14 @@ const AkunForm = (() => {
     }
     const u = isNew ? null : staffList().find(x => x.ID_User === param);
     if (!isNew && !u) { el.innerHTML = emptyState('user', 'Akun tidak ditemukan', 'Akun mungkin sudah dihapus.', '<a class="btn primary" href="#/personel">Kembali ke daftar</a>'); return; }
-    model = { u, role: u ? u.Role : 'Gadik', asg: u && u.penugasan.length ? u.penugasan.map(a => ({ ID_Kelas: a.ID_Kelas, ID_Peleton: a.ID_Peleton || '' })) : [{ ID_Kelas: '', ID_Peleton: '' }] };
+    model = { u, role: 'Gadik', asg: u && u.penugasan.length ? u.penugasan.map(a => ({ ID_Kelas: a.ID_Kelas, ID_Peleton: a.ID_Peleton || '' })) : [{ ID_Kelas: '', ID_Peleton: '' }] };
 
     el.innerHTML =
       '<a href="#/personel" class="btn ghost" style="margin:-6px 0 12px -10px">' + icon('arrow-left', 'sm') + 'Kembali ke daftar personel</a>' +
       pageHead({
         eyebrow: 'Formulir Otorisasi // Administrator Satdik',
-        title: isNew ? 'Tambah Akun & Penugasan Personel' : 'Ubah Akun Personel',
-        desc: 'Isi identitas, kredensial login, dan kelas/peleton yang diampu. Akses data dibatasi otomatis oleh server sesuai penugasan.',
+        title: isNew ? 'Tambah Akun Gadik' : 'Ubah Akun Gadik',
+        desc: 'Isi identitas Gadik, kredensial login, dan kelas yang diampu. Akses data dibatasi otomatis oleh server sesuai penugasan.',
         chips: '<span class="chip ' + (isNew ? '' : 'line') + '">' + (isNew ? 'Mode: registrasi baru' : 'Mode: ubah @' + esc(u.Username)) + '</span>',
         actions: isNew ? '<span class="small muted" style="max-width:220px">Pas foto 4×6 dapat ditambahkan setelah akun disimpan.</span>'
           : '<button type="button" class="pf-chip" id="af-foto" title="Ganti pas foto 4×6">' + avatarAkun(u, 'pf-mini') + '<span><b>Pas Foto 4×6</b><small>Klik untuk mengganti</small></span></button>'
@@ -178,11 +173,9 @@ const AkunForm = (() => {
       '<form id="af" novalidate>' +
       '<div id="af-alert" class="alert red" hidden style="margin-bottom:16px"></div>' +
       // 01
-      '<div class="card section-card"><div class="card-head"><div class="num-badge">01</div><div class="grow"><h3>Identitas & Peran Personel</h3><div class="sub">Menentukan hak akses operasional harian</div></div><span class="chip">Wajib</span></div><div class="card-body">' +
-        '<div class="flabel" style="margin-bottom:10px">Pilihan peran pengguna <span class="req">*</span></div>' +
-        '<div class="radio-cards" id="af-roles">' +
+      '<div class="card section-card"><div class="card-head"><div class="num-badge">01</div><div class="grow"><h3>Identitas Gadik</h3><div class="sub">Tenaga pendidik pengampu mata pelajaran</div></div><span class="chip">Wajib</span></div><div class="card-body">' +
+        '<div class="radio-cards one" id="af-roles">' +
           roleCard('Gadik', 'Gadik (Tenaga Pendidik)', 'Menginput data peserta didik dan nilai mata pelajaran di kelas yang ditugaskan.', 'cap') +
-          roleCard('Pengasuh', 'Pengasuh', 'Menginput Nilai Mental Kepribadian dan catatan pembinaan di kelas/peleton yang diampu.', 'shield') +
         '</div>' +
         '<div class="form-grid three mt-24">' +
           '<div class="field span-all"><label>Nama lengkap & gelar <span class="req">*</span></label><input name="Nama_Lengkap" class="input" maxlength="120" placeholder="Contoh: IPTU Bambang Sugiyarto, S.H." value="' + esc(u ? u.Nama_Lengkap : '') + '"></div>' +
@@ -199,21 +192,20 @@ const AkunForm = (() => {
           : '<div class="field span-2"><label>Password</label><div class="alert gold">' + icon('info') + '<div>Password tidak ditampilkan. Untuk mengganti, gunakan tombol <b>Reset Password</b> (ikon kunci) di daftar personel.</div></div></div>') +
       '</div></div></div>' +
       // 03
-      '<div class="card section-card"><div class="card-head"><div class="num-badge">03</div><div class="grow"><h3>Penugasan Kelas & Peleton</h3><div class="sub">Pembatasan wilayah data ditegakkan di server</div></div><span class="chip red">Zona RBAC</span></div><div class="card-body">' +
+      '<div class="card section-card"><div class="card-head"><div class="num-badge">03</div><div class="grow"><h3>Penugasan Kelas</h3><div class="sub">Pembatasan wilayah data ditegakkan di server</div></div><span class="chip red">Zona RBAC</span></div><div class="card-body">' +
         '<div id="af-asg" style="display:flex;flex-direction:column;gap:12px"></div>' +
         '<button type="button" class="btn outline sm mt-16" id="af-add-asg">' + icon('plus', 'sm') + 'Tambah penugasan</button>' +
         '<div class="notice slim mt-16" style="margin-bottom:0" id="af-preview"></div>' +
       '</div></div>' +
       // 04
       '<div class="card section-card"><div class="card-head"><div class="num-badge">04</div><div class="grow"><h3>Ringkasan Aturan Akses</h3></div></div><div class="card-body">' +
-        '<div class="alert gold">' + icon('lock') + '<div>Akun ini tidak dapat membuka menu Master Data, manajemen akun lain, maupun kelas/peleton di luar penugasan di atas. Setiap perubahan data dicatat beserta waktu dan penggunanya.</div></div>' +
+        '<div class="alert gold">' + icon('lock') + '<div>Akun ini tidak dapat membuka menu Master Data, manajemen akun lain, maupun kelas di luar penugasan di atas. Setiap perubahan data dicatat beserta waktu dan penggunanya.</div></div>' +
       '</div></div>' +
       '<div class="sticky-bar"><span class="grow small muted">' + icon('info', 'sm') + ' Kolom bertanda <span class="req">*</span> wajib diisi.</span>' +
         '<a class="btn outline" href="#/personel">Batal</a><button class="btn primary" type="submit" id="af-save">' + icon('save') + (isNew ? 'Simpan & Terbitkan Akun' : 'Simpan Perubahan') + '</button></div>' +
       '</form>';
 
     const form = $('#af', el);
-    $('#af-roles', el).addEventListener('change', e => { if (e.target.name === 'Role') { model.role = e.target.value; syncRole(); } });
     $('#af-add-asg', el).onclick = () => { model.asg.push({ ID_Kelas: '', ID_Peleton: '' }); renderAsg(); };
     if (isNew) {
       bindEye($('#af-eye1', el), $('#af-pw', el)); bindEye($('#af-eye2', el), $('#af-pw2', el));
@@ -228,36 +220,28 @@ const AkunForm = (() => {
     return '<label class="radio-card' + (model.role === v ? ' checked' : '') + '"><input type="radio" name="Role" value="' + v + '"' + (model.role === v ? ' checked' : '') + '><span class="row" style="gap:8px;justify-content:space-between"><strong>' + esc(title) + '</strong>' + roleBadge(v) + '</span><span class="muted">' + esc(text) + '</span></label>';
   }
 
-  function syncRole() {
-    $$('.radio-card', el).forEach(c => c.classList.toggle('checked', c.querySelector('input').checked));
-    $('#af-kontak', el).hidden = model.role !== 'Gadik';
-    renderAsg();
-  }
+  function syncRole() { renderAsg(); }
 
   function renderAsg() {
-    const kel = kelasList(), box = $('#af-asg', el), isP = model.role === 'Pengasuh';
+    const kel = kelasList(), box = $('#af-asg', el);
     box.innerHTML = model.asg.map((a, i) =>
-      '<div class="asg-row" data-i="' + i + '">' +
+      '<div class="asg-row one" data-i="' + i + '">' +
         '<div class="field"><label>Angkatan & kelas' + (i === 0 ? ' <span class="req">*</span>' : '') + '</label><select class="select" data-k>' + options(kel, 'ID_Kelas', k => k.Nama_Kelas + ' — ' + k.Nama_Angkatan, a.ID_Kelas, 'Pilih kelas') + '</select></div>' +
-        '<div class="field"><label>Peleton binaan<span class="tag">' + (isP ? 'Pengasuh' : 'Tidak dipakai Gadik') + '</span></label><select class="select" data-p' + (isP ? '' : ' disabled') + '>' +
-          (isP ? options(pelOf(a.ID_Kelas), 'ID_Peleton', p => p.Nama_Peleton, a.ID_Peleton, a.ID_Kelas ? 'Semua peleton di kelas ini' : 'Pilih kelas dulu') : '<option>Seluruh kelas</option>') + '</select></div>' +
         '<button type="button" class="btn icon red" data-rm title="Hapus penugasan"' + (model.asg.length === 1 ? ' disabled' : '') + '>' + icon('trash') + '</button>' +
       '</div>').join('');
     $$('.asg-row', box).forEach(row => {
       const i = Number(row.dataset.i);
       row.querySelector('[data-k]').onchange = e => { model.asg[i].ID_Kelas = e.target.value; model.asg[i].ID_Peleton = ''; renderAsg(); };
-      const p = row.querySelector('[data-p]');
-      if (isP) p.onchange = e => { model.asg[i].ID_Peleton = e.target.value; preview(); };
       row.querySelector('[data-rm]').onclick = () => { model.asg.splice(i, 1); renderAsg(); };
     });
     preview();
   }
 
   function preview() {
-    const isP = model.role === 'Pengasuh', ok = model.asg.filter(a => a.ID_Kelas);
-    const n = S.boot.peserta.filter(p => ok.some(a => a.ID_Kelas === p.ID_Kelas && (!isP || !a.ID_Peleton || a.ID_Peleton === p.ID_Peleton))).length;
+    const ok = model.asg.filter(a => a.ID_Kelas);
+    const n = S.boot.peserta.filter(p => ok.some(a => a.ID_Kelas === p.ID_Kelas)).length;
     $('#af-preview', el).innerHTML = '<div class="icon-tile">' + icon('users') + '</div><div><b>Estimasi ' + n + ' peserta terhubung</b><p>' +
-      (ok.length ? 'Akun ini dapat mengakses ' + ok.map(a => esc(kelasName(a.ID_Kelas)) + (isP && a.ID_Peleton ? ' / ' + esc(pelName(a.ID_Peleton)) : '')).join(', ') + '.' : 'Belum ada kelas dipilih — akun tidak akan melihat data peserta mana pun.') + '</p></div>';
+      (ok.length ? 'Akun ini dapat mengakses ' + ok.map(a => esc(kelasName(a.ID_Kelas))).join(', ') + '.' : 'Belum ada kelas dipilih — akun tidak akan melihat data peserta mana pun.') + '</p></div>';
   }
 
   async function submit(form, isNew) {
@@ -373,7 +357,7 @@ const MasterPage = (() => {
         { key: 'Nama', label: 'Personel', cls: 'card-title', render: r => '<div class="t-person">' + avatarAkun({ ID_User: r.ID_User, Nama_Lengkap: r.Nama, Foto_Ver: r.Foto_Ver }, 'sm') + '<div class="t-name"><b>' + esc(r.Nama) + '</b><small class="mono">@' + esc(r.Username) + '</small></div></div>' },
         { key: 'Role', label: 'Peran', render: r => roleBadge(r.Role) },
         { key: 'kelas', label: 'Kelas', sort: r => kelasName(r.ID_Kelas, true), render: r => esc(kelasName(r.ID_Kelas, true)) },
-        { key: 'pel', label: 'Peleton', sort: r => pelName(r.ID_Peleton), render: r => r.Role === 'Gadik' ? '<span class="faint">Seluruh kelas</span>' : (r.ID_Peleton ? esc(pelName(r.ID_Peleton)) : '<span class="faint">Semua peleton</span>') },
+        { key: 'mapel', label: 'Mapel Diampu', sort: false, render: r => { const g = (S.boot.ref.gadik || []).find(x => x.ID_User === r.ID_User), m = g ? [...new Set(S.boot.jadwal.filter(j => j.ID_Gadik === g.ID_Gadik && j.ID_Kelas === r.ID_Kelas).map(j => mapelName(j.ID_Mapel)))] : []; return m.length ? esc(m.join(', ')) : '<span class="faint">Belum ada jadwal</span>'; } },
         { key: 'acts', label: 'Aksi', sort: false, cls: 'acts-cell', render: () => '<div class="acts"><button class="btn icon red" data-act="del" title="Hapus penugasan">' + icon('trash') + '</button></div>' }
       ]
     };
@@ -484,24 +468,17 @@ const MasterPage = (() => {
   function openAsgForm() {
     const staff = staffList().filter(u => u.Status_Aktif === 'Aktif').sort((a, b) => collator.compare(a.Nama_Lengkap, b.Nama_Lengkap));
     const m = openModal({
-      title: 'Tambah Penugasan', icon: 'link', sub: 'Hubungkan personel ke kelas/peleton',
+      title: 'Tambah Penugasan', icon: 'link', sub: 'Hubungkan Gadik ke kelas',
       body: '<form id="pg" class="form-grid" novalidate><div id="pg-alert" class="alert red span-all" hidden></div>' +
-        '<div class="field span-all"><label>Personel <span class="req">*</span></label><select name="ID_User" class="select">' + options(staff, 'ID_User', u => u.Nama_Lengkap + ' — ' + u.Role, '', 'Pilih Gadik atau Pengasuh') + '</select></div>' +
-        '<div class="field"><label>Kelas <span class="req">*</span></label><select name="ID_Kelas" class="select">' + options(kelasList(), 'ID_Kelas', k => k.Nama_Kelas + ' — ' + k.Nama_Angkatan, st.kelas, 'Pilih kelas') + '</select></div>' +
-        '<div class="field"><label>Peleton<span class="tag">Khusus pengasuh</span></label><select name="ID_Peleton" class="select" disabled><option value="">Seluruh kelas</option></select></div></form>',
+        '<div class="field span-all"><label>Gadik <span class="req">*</span></label><select name="ID_User" class="select">' + options(staff, 'ID_User', u => u.Nama_Lengkap + (u.NRP ? ' — NRP ' + u.NRP : ''), '', 'Pilih Gadik') + '</select></div>' +
+        '<div class="field span-all"><label>Kelas <span class="req">*</span></label><select name="ID_Kelas" class="select">' + options(kelasList(), 'ID_Kelas', k => k.Nama_Kelas + ' — ' + k.Nama_Angkatan, st.kelas, 'Pilih kelas') + '</select></div></form>',
       foot: '<button class="btn outline" data-close>Batal</button><button class="btn primary" id="pg-save">' + icon('save') + 'Simpan Penugasan</button>'
     });
-    const form = m.$('#pg'), su = form.querySelector('[name=ID_User]'), sk = form.querySelector('[name=ID_Kelas]'), sp = form.querySelector('[name=ID_Peleton]');
-    const sync = () => {
-      const u = staff.find(x => x.ID_User === su.value), isP = u && u.Role === 'Pengasuh';
-      sp.disabled = !isP;
-      sp.innerHTML = isP ? options(pelOf(sk.value), 'ID_Peleton', p => p.Nama_Peleton, '', 'Semua peleton di kelas ini') : '<option value="">Seluruh kelas</option>';
-    };
-    su.onchange = sync; sk.onchange = sync; sync();
+    const form = m.$('#pg');
     m.$('#pg-save').onclick = async () => {
       clearErrors(form);
       const v = formValues(form);
-      if (!v.ID_User) return fieldError(form, 'ID_User', 'Pilih personel.');
+      if (!v.ID_User) return fieldError(form, 'ID_User', 'Pilih Gadik.');
       if (!v.ID_Kelas) return fieldError(form, 'ID_Kelas', 'Pilih kelas.');
       const done = busy(m.$('#pg-save'), 'Menyimpan…');
       const res = await api('penugasanSave', v);
@@ -661,14 +638,14 @@ window.JadwalAdmin = (() => {
     });
   }
 
-  /** Unggah / ubah dokumen Jadwal Pelatihan (PDF) yang tampil di dashboard Gadik & Pengasuh. */
+  /** Unggah / ubah dokumen Jadwal Pelatihan (PDF) yang tampil di dashboard Gadik. */
   function formDokumen(d) {
     const isEdit = !!d;
     const m = openModal({
-      title: isEdit ? 'Ubah Dokumen Jadwal' : 'Unggah Jadwal Pelatihan (PDF)', icon: 'file-pdf', sub: 'Tampil di dashboard Gadik & Pengasuh',
+      title: isEdit ? 'Ubah Dokumen Jadwal' : 'Unggah Jadwal Pelatihan (PDF)', icon: 'file-pdf', sub: 'Tampil di dashboard Gadik',
       body: '<form id="df" class="form-grid" novalidate><div id="df-alert" class="alert red span-all" hidden></div>' +
         '<div class="field span-all"><label>Judul dokumen <span class="req">*</span></label><input name="Judul" class="input" maxlength="120" placeholder="Contoh: Jadwal Pelatihan Gelombang I 2026" value="' + esc(d ? d.Judul : '') + '"></div>' +
-        '<div class="field span-all"><label>Ditujukan untuk</label><select name="ID_Kelas" class="select">' + options(kelasList(), 'ID_Kelas', k => k.Nama_Kelas + ' — ' + k.Nama_Angkatan, d ? d.ID_Kelas : '', 'Semua kelas (umum)') + '</select><div class="hint">Gadik & Pengasuh hanya melihat dokumen umum dan dokumen kelas penugasannya.</div></div>' +
+        '<div class="field span-all"><label>Ditujukan untuk</label><select name="ID_Kelas" class="select">' + options(kelasList(), 'ID_Kelas', k => k.Nama_Kelas + ' — ' + k.Nama_Angkatan, d ? d.ID_Kelas : '', 'Semua kelas (umum)') + '</select><div class="hint">Gadik hanya melihat dokumen umum dan dokumen kelas penugasannya.</div></div>' +
         '<label class="drop span-all" id="df-drop"><input type="file" id="df-file" accept="application/pdf,.pdf" hidden><div class="icon-tile">' + icon('file-pdf') + '</div><b id="df-file-t">' + (isEdit ? 'Ganti berkas PDF (opsional)' : 'Pilih berkas PDF atau seret ke sini') + '</b><div class="hint mt-8">' + (isEdit ? 'Saat ini: ' + esc(d.Nama_Berkas) + ' • ' + esc(ukuranTeks(d.Ukuran)) : 'Format PDF, maksimal 10 MB') + '</div></label>' +
         '</form>',
       foot: '<button class="btn outline" data-close>Batal</button><button class="btn primary" id="df-save">' + icon('upload') + (isEdit ? 'Simpan' : 'Unggah') + '</button>'
@@ -706,7 +683,7 @@ window.JadwalAdmin = (() => {
       S.boot.dokumen = res.data.dokumen; bootChanged();
       m.close();
       render();
-      toast(isEdit ? 'Dokumen diperbarui' : 'Jadwal PDF diunggah', v.Judul + ' — kini tampil di dashboard Gadik & Pengasuh.');
+      toast(isEdit ? 'Dokumen diperbarui' : 'Jadwal PDF diunggah', v.Judul + ' — kini tampil di dashboard Gadik.');
     };
   }
 
@@ -814,10 +791,10 @@ window.JadwalAdmin = (() => {
 
 // ==========================================================================
 // REKAP HARIAN — Admin (US-12): lembar penilaian harian per sesi (format PROLAT),
-// status sesi + buka kunci, dan Nilai Mental. NIL AKHIR ada di menu Rekap Akhir.
+// status sesi + buka kunci. NIL AKHIR ada di menu Rekap Akhir.
 // ==========================================================================
 const RekapPage = (() => {
-  const st = { kelas: '', pel: '', q: '', tab: 'harian', sesi: '', fStatus: '' };
+  const st = { kelas: '', pel: '', q: '', sesi: '', fStatus: '' };
   let el, err = null;
   const data = () => (S.data.rekap || {})[st.kelas];
 
@@ -826,9 +803,9 @@ const RekapPage = (() => {
     if (!kel.some(k => k.ID_Kelas === st.kelas)) { st.kelas = kel[0] ? kel[0].ID_Kelas : ''; st.sesi = ''; }
     el.innerHTML =
       pageHead({
-        eyebrow: 'Rekapitulasi // Penilaian Harian & Mental Kepribadian',
+        eyebrow: 'Rekapitulasi // Penilaian Harian PROLAT',
         title: 'Rekap Harian',
-        desc: 'Lembar penilaian harian setiap sesi (A1–C2 + JUMLAH) yang sudah dikirim Gadik, status sesi, dan Nilai Mental Kepribadian. Sesi draf belum dihitung. NIL AKHIR &amp; peringkat ada di menu <a href="#/rekap-akhir">Rekap Akhir</a>.',
+        desc: 'Lembar penilaian harian setiap sesi (A1–C2 + JUMLAH) yang sudah dikirim Gadik beserta status sesinya. Sesi draf belum dihitung. NIL AKHIR &amp; peringkat ada di menu <a href="#/rekap-akhir">Rekap Akhir</a>.',
         actions: '<a class="btn outline" id="rk-akhir" href="#/rekap-akhir">' + icon('medal') + 'Rekap Akhir</a><button class="btn outline" id="rk-refresh">' + icon('refresh') + 'Segarkan</button>'
       }) +
       '<div class="card"><div class="toolbar">' +
@@ -837,13 +814,11 @@ const RekapPage = (() => {
         '<div class="field search"><label for="rk-q">Cari peserta</label><div class="input-wrap">' + icon('search', 'lead') + '<input class="input with-lead" id="rk-q" placeholder="Nama atau NRP…" value="' + esc(st.q) + '" autocomplete="off"></div></div>' +
       '</div></div>' +
       '<div class="grid c4 keep2 mt-24" id="rk-stats"></div>' +
-      '<div class="tabs mt-24" id="rk-tabs" role="tablist"></div>' +
-      '<div class="card" id="rk-main"></div>';
+      '<div class="card mt-24" id="rk-main"></div>';
     $('#rk-akhir', el).href = '#/rekap-akhir/' + encodeURIComponent(st.kelas);
     $('#rk-kelas', el).onchange = e => { st.kelas = e.target.value; st.pel = ''; st.sesi = ''; render(); load(); };
     $('#rk-pel', el).onchange = e => { st.pel = e.target.value; fill(); };
     $('#rk-q', el).addEventListener('input', debounce(e => { st.q = e.target.value; fill(); }, 250));
-    $('#rk-tabs', el).onclick = e => { const b = e.target.closest('[data-tab]'); if (b) { st.tab = b.dataset.tab; fill(); } };
     $('#rk-refresh', el).onclick = () => load(true);
     const main = $('#rk-main', el);
     main.addEventListener('click', e => {
@@ -867,19 +842,16 @@ const RekapPage = (() => {
     const host = $('#rk-main', el), d = data();
     const units = d ? hariPenilaian(d.sesi) : [], labelOf = d ? labelHariMapel(d.sesi) : {};
     const nSesi = d ? d.sesi.length : 0, nDraf = d ? d.sesi.filter(s => s.Status !== 'Selesai').length : 0;
-    $('#rk-tabs', el).innerHTML = [['harian', 'Penilaian Harian', 'calendar'], ['mental', 'Nilai Mental', 'shield-star']].map(t =>
-      '<button role="tab" data-tab="' + t[0] + '" class="' + (st.tab === t[0] ? 'on' : '') + '" aria-selected="' + (st.tab === t[0]) + '">' + icon(t[2], 'sm') + t[1] + (t[0] === 'harian' && d ? '<span class="count">' + nSesi + '</span>' : '') + '</button>').join('');
     if (!st.kelas) { host.innerHTML = emptyState('building', 'Belum ada kelas', 'Tambahkan angkatan & kelas di Master Data.'); $('#rk-stats', el).innerHTML = ''; return; }
     if (!d) { host.innerHTML = err ? errorState(err) : skeletonRows(8, 6); $('#rk-stats', el).innerHTML = ''; return; }
-    const ment = Object.keys(d.mental || {}).map(k => d.mental[k][0]).filter(v => v !== '' && v != null);
+    const nNilai = Object.keys(d.nilai || {}).reduce((n, k) => n + Object.keys(d.nilai[k]).length, 0);
     $('#rk-stats', el).innerHTML =
       stat({ label: 'Hari Dinilai', value: units.length, unit: 'hari', icon: 'calendar', cap: 'Sesi yang sudah masuk rekap' }) +
       stat({ label: 'Sesi Masih Draf', value: nDraf, unit: 'sesi', icon: 'clock', tone: nDraf ? 'red' : '', cap: nDraf ? 'Belum dikirim Gadik — tidak dihitung' : 'Semua sesi sudah dikirim' }) +
       stat({ label: 'Peserta', value: pesertaCount(st.kelas), unit: 'orang', icon: 'users', cap: esc(kelasName(st.kelas, true)) }) +
-      stat({ label: 'Rata-rata Nilai Mental', value: ment.length ? fmt.num(avg(ment), 2) : '—', unit: ment.length ? '/ 100' : '', icon: 'shield-star', cap: ment.length + ' peserta dinilai pengasuh' });
+      stat({ label: 'Lembar Nilai Masuk', value: nNilai, unit: 'baris', icon: 'clipboard-check', cap: nSesi + ' sesi tercatat di kelas ini' });
 
     const main = host;
-    if (st.tab === 'mental') return mentalTable(main, d);
     const s = st.sesi && d.sesi.find(x => x.ID_Sesi === st.sesi);
     if (s) return lembar(main, d, s, labelOf[s.ID_Sesi]);
     st.sesi = '';
@@ -919,33 +891,6 @@ const RekapPage = (() => {
       (s.Impor ? '' : '<button type="button" class="btn outline sm" data-buka="' + esc(s.ID_Sesi) + '">' + icon('unlock', 'sm') + 'Buka kunci</button>') +
       '<button type="button" class="btn danger-line sm" data-hapus-sesi="' + esc(s.ID_Sesi) + '">' + icon('trash', 'sm') + 'Hapus</button></div>' +
       lembarLegend() + '<div class="sheet-wrap">' + (rows.length ? lembarTabel(rows, {}) : emptyState('search', 'Tidak ada peserta', 'Tidak ada peserta yang cocok dengan filter.')) + '</div>';
-  }
-
-  function mentalTable(main, d) {
-    main.innerHTML = '<div id="rk-mental"></div>';
-    const rows = pesertaKelas().map(r => {
-      const mt = d.mental[r.p.ID_Peserta];
-      return { ID_Peserta: r.p.ID_Peserta, no: r.no, NRP: r.p.NRP, Nama: r.p.Nama_Lengkap, Pel: pelName(r.p.ID_Peleton), mental: mt && mt[0] !== '' && mt[0] != null ? Number(mt[0]) : '', catatan: mt ? mt[1] : '', mBy: mt ? mt[3] : '', mAt: mt ? mt[2] : '' };
-    });
-    new Table($('#rk-mental', main), {
-      key: 'ID_Peserta', unit: 'peserta', pageSize: 25, sort: { key: 'no', dir: 'asc' },
-      columns: [
-        { key: 'no', label: 'No', cls: 'no', render: r => pad2(r.no) },
-        { key: 'Nama', label: 'Peserta', cls: 'card-title', render: r => '<div class="t-name"><b>' + esc(r.Nama) + '</b><small><span class="mono">' + esc(r.NRP) + '</span> • ' + esc(r.Pel) + '</small></div>' },
-        { key: 'mental', label: 'Skor Mental', num: true, render: r => r.mental === '' ? '<span class="badge empty">Belum dinilai</span>' : '<b>' + fmt.num(r.mental, 2) + '</b>' },
-        { key: 'catatan', label: 'Catatan Pembinaan', cls: 'wide', render: r => r.catatan ? esc(r.catatan) : '<span class="faint">—</span>' },
-        { key: 'mBy', label: 'Diinput oleh', render: r => r.mBy ? esc(d.names[r.mBy] || r.mBy) : '<span class="faint">—</span>' },
-        { key: 'mAt', label: 'Waktu', render: r => r.mAt ? '<span class="small">' + esc(fmt.dateTime(r.mAt)) + '</span>' : '<span class="faint">—</span>' },
-        { key: 'acts', label: 'Aksi', sort: false, cls: 'acts-cell', render: r => r.mental === '' && !r.catatan ? '<span class="faint">—</span>' : '<div class="acts"><button class="btn icon red" data-act="del" title="Hapus nilai mental">' + icon('trash') + '</button></div>' }
-      ],
-      onAction: async (act, id) => {
-        if (act !== 'del') return;
-        const p = R().peserta[id];
-        const r = await hapusData('mental', id, { judul: 'Hapus nilai mental?', nama: 'Nilai mental ' + (p ? p.Nama_Lengkap : id), utama: 'Nilai_Mental' });
-        if (r) load(true);
-      },
-      empty: () => emptyState('search', 'Tidak ada peserta', '')
-    }).set(rows);
   }
 
   function ekspor(kind, btn) {
@@ -1032,8 +977,8 @@ page('rekap', RekapPage);
 const MigrasiPage = (() => {
   const GROUPS = [
     ['Master', [['Angkatan_Kelas', 'Angkatan & Kelas'], ['Peleton', 'Peleton'], ['Mata_Pelajaran', 'Mata Pelajaran']]],
-    ['Akun & Personel', [['Users', 'Akun (Users)'], ['Data_Gadik', 'Data Gadik'], ['Data_Pengasuh', 'Data Pengasuh'], ['Penugasan', 'Penugasan']]],
-    ['Akademik', [['Peserta_Didik', 'Peserta Pelatihan'], ['Jadwal', 'Jadwal'], ['Sesi_Nilai', 'Sesi Penilaian'], ['Nilai', 'Nilai Harian'], ['Nilai_Mental', 'Nilai Mental']]]
+    ['Akun & Personel', [['Users', 'Akun (Users)'], ['Data_Gadik', 'Data Gadik'], ['Penugasan', 'Penugasan']]],
+    ['Akademik', [['Peserta_Didik', 'Peserta Pelatihan'], ['Jadwal', 'Jadwal'], ['Sesi_Nilai', 'Sesi Penilaian'], ['Nilai', 'Nilai Harian']]]
   ];
   const LABEL = {}; GROUPS.forEach(g => g[1].forEach(x => { LABEL[x[0]] = x[1]; }));
   const st = { source: '', sheets: null, overwrite: false, last: null };
@@ -1072,7 +1017,6 @@ const MigrasiPage = (() => {
             '<li><b>Kelas</b>: Angkatan / Gelombang, Kelas</li>' +
             '<li><b>Mapel</b>: Mata Pelajaran, Bobot/JP</li>' +
             '<li><b>Nilai Harian</b>: NRP, Mapel, A1 A2 A3 B1 B2 C1 C2 (0–10) — atau satu kolom Nilai (0–100) — dan Tanggal (opsional)</li>' +
-            '<li><b>Nilai Mental</b>: NRP, Nilai, Catatan</li>' +
             '<li>Database SIPL lain: semua sheet & kolom asli.</li></ul>' +
           '<p class="muted">Kelas/peleton/mapel boleh ditulis dengan nama; dicocokkan ke data yang sudah ada. NRP yang kehilangan angka 0 di depan dipulihkan ke 8 digit. Nilai hasil import langsung dihitung di rekap.</p></div></div>' +
       '</div>';

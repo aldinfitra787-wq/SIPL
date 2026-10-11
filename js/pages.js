@@ -153,8 +153,8 @@ function saveBadge(state, at, errMsg) {
 // HAPUS BERANTAI — satu dialog untuk SEMUA tombol Hapus.
 // Server menghitung dulu data yang ikut terhapus (pratinjau), lalu menghapus semuanya setelah dikonfirmasi.
 // --------------------------------------------------------------------------
-const HAPUS_URUTAN = ['Angkatan_Kelas', 'Peleton', 'Mata_Pelajaran', 'Users', 'Data_Gadik', 'Data_Pengasuh', 'Penugasan', 'Peserta_Didik', 'Jadwal', 'Sesi_Nilai', 'Nilai', 'Nilai_Mental', 'Dokumen_Jadwal'];
-const HAPUS_IKON = { Angkatan_Kelas: 'building', Peleton: 'layers', Mata_Pelajaran: 'book', Users: 'id-card', Data_Gadik: 'user', Data_Pengasuh: 'user', Penugasan: 'link', Peserta_Didik: 'users', Jadwal: 'calendar', Sesi_Nilai: 'clipboard-check', Nilai: 'pen', Nilai_Mental: 'shield-star', Dokumen_Jadwal: 'file-pdf' };
+const HAPUS_URUTAN = ['Angkatan_Kelas', 'Peleton', 'Mata_Pelajaran', 'Users', 'Data_Gadik', 'Penugasan', 'Peserta_Didik', 'Jadwal', 'Sesi_Nilai', 'Nilai', 'Dokumen_Jadwal'];
+const HAPUS_IKON = { Angkatan_Kelas: 'building', Peleton: 'layers', Mata_Pelajaran: 'book', Users: 'id-card', Data_Gadik: 'user', Penugasan: 'link', Peserta_Didik: 'users', Jadwal: 'calendar', Sesi_Nilai: 'clipboard-check', Nilai: 'pen', Dokumen_Jadwal: 'file-pdf' };
 
 /**
  * Tampilkan dialog hapus: pratinjau dampak → konfirmasi → hapus.
@@ -177,7 +177,7 @@ function hapusData(jenis, id, o) {
       const body = m.$('#hp-body');
       if (!res.success) { body.innerHTML = '<div class="alert red">' + icon('alert-circle') + '<div>' + esc(res.message) + '</div></div>'; return; }
       const d = res.data, L = d.labels || {}, J = d.jumlah || {};
-      const ikut = HAPUS_URUTAN.filter(k => J[k] && k !== o.utama && !(k === 'Data_Gadik' || k === 'Data_Pengasuh') && !(k === 'Users' && jenis === 'akun'));
+      const ikut = HAPUS_URUTAN.filter(k => J[k] && k !== o.utama && k !== 'Data_Gadik' && !(k === 'Users' && jenis === 'akun'));
       body.innerHTML = '<p class="hp-lead"><b>' + esc(o.nama || d.label) + '</b> akan dihapus permanen' + (ikut.length ? ' <b>beserta semua data yang berkaitan</b>:' : '.') + '</p>' +
         (ikut.length ? '<ul class="hp-list">' + ikut.map(k => '<li>' + icon(HAPUS_IKON[k] || 'info', 'sm') + '<b>' + fmt.num(J[k]) + '</b><span>' + esc(L[k] || k) + '</span></li>').join('') + '</ul>' : '') +
         (d.nilai ? '<div class="alert red mt-16">' + icon('alert-triangle') + '<div><b>' + fmt.num(d.nilai) + ' data nilai ikut terhapus.</b> Rekap Harian &amp; Rekap Akhir langsung dihitung ulang tanpa nilai tersebut.</div></div>' +
@@ -228,9 +228,9 @@ function applyHapus(d) {
   else if (S.data.users && S.data.users.users && (U.size || PN.size)) {
     S.data.users.users = S.data.users.users.filter(u => !U.has(u.ID_User)).map(u => Object.assign(u, { penugasan: (u.penugasan || []).filter(a => !PN.has(a.ID_Penugasan)) }));
   }
-  if (del.Nilai || del.Sesi_Nilai || del.Nilai_Mental || del.Peserta_Didik || del.Jadwal) {
-    S.data.rekap = {}; S.data.harian = {}; if (S.data.mental) S.data.mental = null;
-    cacheDrop(['rekap:', 'harian:', 'mental']);
+  if (del.Nilai || del.Sesi_Nilai || del.Peserta_Didik || del.Jadwal) {
+    S.data.rekap = {}; S.data.harian = {};
+    cacheDrop(['rekap:', 'harian:']);
   }
   bootChanged();
 }
@@ -361,7 +361,7 @@ function dokItem(d, admin) {
     (admin ? '<button type="button" class="btn icon" data-dok-ubah="' + esc(d.ID_Dokumen) + '" title="Ubah / ganti berkas" aria-label="Ubah">' + icon('edit') + '</button><button type="button" class="btn icon red" data-dok-hapus="' + esc(d.ID_Dokumen) + '" title="Hapus" aria-label="Hapus">' + icon('trash') + '</button>' : '') +
     '</div></li>';
 }
-/** Kartu "Jadwal Pelatihan (PDF)" untuk dashboard Gadik & Pengasuh (dan halaman Jadwal). */
+/** Kartu "Jadwal Pelatihan (PDF)" untuk dashboard Gadik (dan halaman Jadwal). */
 function dokumenKartu(opt) {
   opt = opt || {};
   const list = dokumenList(), utama = list[0];
@@ -370,7 +370,7 @@ function dokumenKartu(opt) {
     '<div class="card-body">' + (list.length
       ? (!opt.admin && utama ? '<button type="button" class="dok-hero" data-dok-lihat="' + esc(utama.ID_Dokumen) + '"><span class="dok-hero-ic">' + icon('file-pdf') + '</span><span class="grow"><span class="label-mono">Terbaru</span><b>' + esc(utama.Judul) + '</b><small>' + esc(dokMeta(utama)) + '</small></span><span class="dok-hero-go">Buka' + icon('arrow-right', 'sm') + '</span></button>' : '') +
         ((opt.admin ? list : list.slice(1, 5)).length ? '<ul class="dok-list">' + (opt.admin ? list : list.slice(1, 5)).map(d => dokItem(d, opt.admin)).join('') + '</ul>' : '')
-      : '<p class="muted">' + (opt.admin ? 'Belum ada dokumen. Unggah jadwal pelatihan (PDF) agar tampil di dashboard Gadik dan Pengasuh.' : 'Belum ada jadwal pelatihan (PDF) yang diunggah Admin Satdik.') + '</p>') +
+      : '<p class="muted">' + (opt.admin ? 'Belum ada dokumen. Unggah jadwal pelatihan (PDF) agar tampil di dashboard Gadik.' : 'Belum ada jadwal pelatihan (PDF) yang diunggah Admin Satdik.') + '</p>') +
     '</div></div>';
 }
 /** Kartu ringkasan dashboard: dokumen jadwal terbaru + tombol buka. */
@@ -478,7 +478,7 @@ function renderDashboard(el) {
   bindDokumen(el);
   if (S.role === 'Admin') return dashAdmin(el);
   if (S.role === 'Gadik') return dashGadik(el);
-  return dashPengasuh(el);
+  el.innerHTML = emptyState('lock', 'Peran tidak dikenali', 'Peran akun ini sudah tidak digunakan di SIPL. Hubungi Admin Satdik.');
 }
 
 function shortcut(href, ic, title, text, go, tone) {
@@ -495,14 +495,14 @@ function dashAdmin(el) {
     pageHead({
       eyebrow: (CFG.TAHUN_AJARAN ? 'TA ' + CFG.TAHUN_AJARAN + ' // ' : '') + 'Sistem Informasi Pelatihan',
       title: 'Dashboard Administrator',
-      desc: 'Pusat kendali data pelatihan, jadwal pelajaran, personel Gadik dan Pengasuh, serta rekap penilaian ' + esc(CFG.INSTANSI || 'SPN Polda Papua Barat') + '.',
+      desc: 'Pusat kendali data pelatihan, jadwal pelajaran, tenaga pendidik (Gadik), serta rekap penilaian ' + esc(CFG.INSTANSI || 'SPN Polda Papua Barat') + '.',
       chips: roleBadge('Admin'),
       actions: '<a class="btn outline" href="#/jadwal">' + icon('calendar') + 'Atur Jadwal</a><a class="btn primary" href="#/akun/baru">' + icon('user-plus') + 'Tambah Akun</a>'
     }) +
     '<div class="grid c4 keep2">' +
       stat({ label: 'Kelas Aktif', value: st.kelasAktif || 0, unit: 'kelas', icon: 'building', cap: (st.kelasTotal || 0) + ' angkatan/kelas pelatihan terdaftar' }) +
       stat({ label: 'Gadik', value: st.gadik || 0, unit: 'personel', icon: 'book', cap: 'Tenaga pendidik aktif' }) +
-      stat({ label: 'Pengasuh', value: st.pengasuh || 0, unit: 'personel', icon: 'shield', cap: 'Pengasuh peserta aktif' }) +
+      stat({ label: 'Mata Pelajaran', value: b.ref.mapel.filter(m => isAktif(m.Status)).length, unit: 'mapel', icon: 'layers', cap: '1 mapel = 6 hari pelatihan' }) +
       stat({ label: 'Peserta Pelatihan', value: st.peserta || 0, unit: 'orang', icon: 'users', cap: 'Terdaftar di seluruh kelas' }) +
     '</div>' +
     (nConf ? '<div class="notice red mt-24"><div class="icon-tile">' + icon('alert-triangle') + '</div><div class="grow"><b>' + nConf + ' bentrok jadwal terdeteksi</b><p>Ada Gadik atau kelas yang dijadwalkan pada jam yang sama. Selesaikan agar jadwal valid.</p></div><a class="btn danger sm" href="#/jadwal">Tinjau jadwal</a></div>' : '') +
@@ -520,7 +520,7 @@ function dashAdmin(el) {
     '</div>' +
     '<div class="section-title"><h2>Menu Pintas</h2><span class="label-mono">Administrator</span></div>' +
     '<div class="grid c4">' +
-      shortcut('personel', 'id-card', 'Personel & Akun', 'Kelola akun login Gadik dan Pengasuh, reset password, dan penugasan kelas/peleton.') +
+      shortcut('personel', 'id-card', 'Personel & Akun', 'Kelola akun login Gadik, pas foto, reset password, dan penugasan kelas.') +
       shortcut('jadwal', 'calendar', 'Jadwal Pelajaran', 'Matriks jadwal mingguan per kelas dengan deteksi bentrok Gadik dan kelas otomatis.') +
       shortcut('rekap-akhir', 'medal', 'Rekap Akhir', 'NIL AKHIR & peringkat per kelas sesuai format PROLAT, siap diunduh PDF/Excel.') +
       shortcut('master', 'database', 'Master Data', 'Angkatan & kelas pelatihan, peleton, mata pelajaran, dan penugasan personel.') +
@@ -603,44 +603,6 @@ function dashGadik(el) {
     '</div>';
 }
 
-function dashPengasuh(el) {
-  const b = S.boot, me = S.me, sc = b.scope;
-  const done = new Set((b.stat && b.stat.mentalDone) || []);
-  const total = b.peserta.length, filled = b.peserta.filter(p => done.has(p.ID_Peserta)).length;
-  const pct = total ? Math.round(filled / total * 100) : 0;
-  const labels = sc.pairs.map(a => kelasName(a.k) + (a.p ? ' — ' + pelName(a.p) : ' (semua peleton)'));
-  const belum = b.peserta.filter(p => !done.has(p.ID_Peserta)).sort((x, y) => collator.compare(x.Nama_Lengkap, y.Nama_Lengkap));
-  const today = todaySessions(b.jadwal);
-  el.innerHTML =
-    pageHead({
-      eyebrow: 'Korps Pengasuh // ' + (labels[0] || 'Belum ditugaskan'),
-      title: 'Dashboard Pengasuh',
-      desc: 'Selamat datang, <b>' + esc(me.Nama_Lengkap) + '</b>' + (me.NRP ? ' <span class="nrp">NRP ' + esc(me.NRP) + '</span>' : '') + '. Pantau dan input Nilai Mental Kepribadian peserta binaan Anda.',
-      chips: roleBadge('Pengasuh') + '<span class="chip">' + icon('lock', 'sm') + 'Akses peleton binaan</span>'
-    }) +
-    '<div class="notice bur"><div class="icon-tile">' + icon('shield-check') + '</div><div><b>Pemberitahuan kewenangan pengasuh</b><p>Anda hanya dapat melihat data peserta dan menginput Nilai Mental Kepribadian pada kelas/peleton binaan Anda. Nilai mata pelajaran tidak dapat diakses.</p></div></div>' +
-    (sc.pairs.length ? '' : '<div class="notice red"><div class="icon-tile">' + icon('alert-triangle') + '</div><div><b>Belum ada penugasan peleton</b><p>Hubungi Admin Satdik agar akun Anda ditugaskan ke kelas/peleton.</p></div></div>') +
-    '<div class="grid c4 dash-sum">' +
-      '<div class="card pad"><div class="row between"><span class="label-mono">Peleton Binaan</span><div class="icon-tile">' + icon('layers') + '</div></div>' +
-        (labels.length ? labels.map(l => '<div class="mt-8"><b style="font-size:17px">' + esc(l) + '</b></div>').join('') : '<p class="muted mt-8">—</p>') +
-        '<div class="muted small mt-8"><span class="mono">' + total + '</span> peserta asuhan</div></div>' +
-      '<div class="card pad"><div class="row between"><span class="label-mono">Kelengkapan Nilai Mental</span><div class="icon-tile">' + icon('clipboard-check') + '</div></div>' +
-        '<div class="stat" style="border:0;box-shadow:none;padding:0;min-height:0;margin-top:8px"><div class="big">' + filled + '<small>/ ' + total + ' peserta</small></div></div>' +
-        '<div class="progress lg mt-8"><span style="width:' + pct + '%"></span></div><div class="row between small mt-8"><span class="muted">' + pct + '% terisi</span><span class="muted">' + (total - filled) + ' tersisa</span></div>' +
-        '<a class="btn primary block mt-16" href="#/mental">Lanjutkan Input Nilai' + icon('arrow-right', 'sm') + '</a></div>' +
-      '<div class="card pad"><div class="row between"><span class="label-mono">Jadwal Hari Ini</span><div class="icon-tile">' + icon('calendar') + '</div></div>' +
-        (today.length ? '<ul class="list-clean mt-8">' + today.slice(0, 4).map(j => '<li><span class="mono small">' + esc(fmt.jam(j.Jam_Mulai)) + '</span><span class="grow">' + esc(mapelName(j.ID_Mapel)) + '</span>' + sessionBadge(sessionState(j, nowWIT())) + '</li>').join('') + '</ul>' : '<p class="muted mt-8">Tidak ada pelajaran hari ini.</p>') +
-        '<a class="btn outline block mt-16" href="#/jadwal">Lihat jadwal lengkap</a></div>' +
-      dokumenRingkas() +
-    '</div>' +
-    '<div class="card mt-24"><div class="card-head"><div class="icon-tile red">' + icon('alert-triangle') + '</div><div class="grow"><h3>Peserta Belum Dinilai</h3><div class="sub">Peserta asuhan yang belum memiliki Nilai Mental Kepribadian</div></div><span class="chip red">' + belum.length + ' peserta</span></div>' +
-      (belum.length ? '<div class="table-wrap"><table class="dt cards"><thead><tr><th>No</th><th>Nama</th><th>NRP</th><th>Peleton</th><th></th></tr></thead><tbody>' +
-        belum.slice(0, 8).map((p, i) => '<tr><td class="no">' + pad2(i + 1) + '</td><td data-label="Nama" class="card-title"><div class="t-person"><div class="avatar sm">' + esc(initials(p.Nama_Lengkap)) + '</div><div class="t-name"><b>' + esc(p.Nama_Lengkap) + '</b></div></div></td><td data-label="NRP"><span class="nrp">' + esc(p.NRP) + '</span></td><td data-label="Peleton">' + esc(pelName(p.ID_Peleton)) + '</td><td class="acts-cell right"><a class="btn outline xs" href="#/mental">Isi nilai</a></td></tr>').join('') +
-        '</tbody></table></div>' + (belum.length > 8 ? '<div class="pager"><span>dan ' + (belum.length - 8) + ' peserta lainnya</span></div>' : '') :
-        emptyState('check-circle', 'Semua peserta sudah dinilai', 'Kerja bagus! Nilai mental seluruh peserta asuhan sudah terisi.')) +
-    '</div>';
-}
-
 // ==========================================================================
 // PESERTA PELATIHAN (US-09, US-13)
 // ==========================================================================
@@ -657,12 +619,11 @@ const PesertaPage = (() => {
     const multi = S.role === 'Admin' || myKelas().length > 1;
     el.innerHTML =
       pageHead({
-        eyebrow: S.role === 'Admin' ? 'Data Peserta Pelatihan // Semua Kelas' : S.role === 'Gadik' ? 'Data Peserta Pelatihan // Isolasi Kelas Binaan' : 'Data Peserta Pelatihan // Peleton Binaan',
+        eyebrow: S.role === 'Admin' ? 'Data Peserta Pelatihan // Semua Kelas' : 'Data Peserta Pelatihan // Isolasi Kelas Binaan',
         title: 'Peserta Pelatihan',
         desc: S.role === 'Gadik' ? 'Daftar resmi peserta di kelas penugasan Anda. Anda dapat menambah dan memperbarui nama, pangkat, NRP, dan peleton.' :
-          S.role === 'Admin' ? 'Daftar peserta pelatihan seluruh kelas. Data diinput oleh Gadik di masing-masing kelas; Admin dapat menghapus peserta beserta seluruh nilainya.' :
-          'Daftar peserta di kelas/peleton binaan Anda (lihat saja).',
-        chips: S.role === 'Admin' ? '<span class="chip line">' + icon('eye', 'sm') + 'Lihat &amp; hapus</span>' : '<span class="chip">' + icon('lock', 'sm') + (S.role === 'Gadik' ? 'Kelas penugasan' : 'Peleton binaan') + '</span>',
+          'Daftar peserta pelatihan seluruh kelas. Data diinput oleh Gadik di masing-masing kelas; Admin dapat menghapus peserta beserta seluruh nilainya.',
+        chips: S.role === 'Admin' ? '<span class="chip line">' + icon('eye', 'sm') + 'Lihat &amp; hapus</span>' : '<span class="chip">' + icon('lock', 'sm') + 'Kelas penugasan' + '</span>',
         actions: canEdit() ? '<button class="btn primary" id="ps-add">' + icon('user-plus') + 'Tambah Peserta</button>' : ''
       }) +
       '<div class="grid c3 keep2" id="ps-stats"></div>' +
@@ -796,7 +757,7 @@ const PesertaPage = (() => {
 page('peserta', PesertaPage);
 
 // ==========================================================================
-// JADWAL — lihat saja (Gadik & Pengasuh). Admin memakai versi admin.js.
+// JADWAL — lihat saja (Gadik). Admin memakai versi admin.js.
 // ==========================================================================
 const JadwalView = (() => {
   const st = { kelas: '', tgl: '' };
@@ -812,17 +773,16 @@ const JadwalView = (() => {
     const days = dates.filter((t, i) => i < 6 || week.some(j => jadwalAktif(j, t)));
     const list = all.filter(j => jadwalAktif(j, st.tgl)).sort((a, b) => menit(a.Jam_Mulai) - menit(b.Jam_Mulai));
     const mapelPekan = Array.from(new Set(week.map(j => j.ID_Mapel)));
-    const pairLabel = S.role === 'Pengasuh' ? S.boot.scope.pairs.filter(a => a.k === st.kelas).map(a => a.p ? pelName(a.p) : 'Semua peleton').join(', ') : '';
     const upcoming = all.filter(j => j.Tanggal_Selesai && j.Tanggal_Selesai >= today).sort((a, b) => a.Tanggal_Mulai.localeCompare(b.Tanggal_Mulai));
     el.innerHTML =
       pageHead({
         eyebrow: 'Jadwal Resmi Kelas Binaan // Mode Lihat Saja',
         title: 'Jadwal Pelajaran',
-        desc: st.kelas ? esc(kelasName(st.kelas, true)) + (pairLabel ? ' — ' + esc(pairLabel) : '') + ' • 1 mata pelajaran = 6 hari (Senin–Sabtu), 08.00–17.00 WIT' : 'Belum ada kelas yang ditugaskan.',
+        desc: st.kelas ? esc(kelasName(st.kelas, true)) + ' • 1 mata pelajaran = 6 hari (Senin–Sabtu), 08.00–17.00 WIT' : 'Belum ada kelas yang ditugaskan.',
         chips: '<span class="chip line">' + icon('eye', 'sm') + 'Hanya lihat</span>',
         actions: kel.length > 1 ? '<select class="select" id="jv-kelas" style="min-width:240px">' + options(kel, 'ID_Kelas', k => k.Nama_Kelas + ' — ' + k.Nama_Angkatan, st.kelas) + '</select>' : ''
       }) +
-      '<div class="notice"><div class="icon-tile">' + icon('lock') + '</div><div><b>Tampilan terisolasi (lihat saja)</b><p>Gadik dan Pengasuh tidak dapat mengubah jadwal. Hubungi Admin Satdik untuk permohonan perubahan tanggal, jam, atau tukar mengajar.</p></div></div>' +
+      '<div class="notice"><div class="icon-tile">' + icon('lock') + '</div><div><b>Tampilan terisolasi (lihat saja)</b><p>Gadik tidak dapat mengubah jadwal. Hubungi Admin Satdik untuk permohonan perubahan tanggal, jam, atau tukar mengajar.</p></div></div>' +
       (dokumenList().length ? dokumenKartu({ cls: 'mb-24' }) : '') +
       '<div class="card"><div class="card-head" style="flex-wrap:wrap"><div class="wk-nav"><button class="btn icon" data-wk="-7" aria-label="Pekan sebelumnya">' + icon('chevron-left') + '</button><div class="wk-t"><b>' + esc(tglRingkas(dates[0]) + ' – ' + tglRingkas(dates[5])) + '</b><small>' + (wk === senin(today) ? 'Pekan ini' : esc(mapelPekan.length ? mapelPekan.map(mapelName).join(', ') : 'Tidak ada mapel')) + '</small></div><button class="btn icon" data-wk="7" aria-label="Pekan berikutnya">' + icon('chevron-right') + '</button></div>' +
         '<div class="day-chips" role="tablist">' +
@@ -1570,185 +1530,6 @@ const RekapAkhirPage = (() => {
   };
 })();
 page('rekap-akhir', RekapAkhirPage);
-
-// ==========================================================================
-// NILAI MENTAL KEPRIBADIAN — Pengasuh (US-11)
-// ==========================================================================
-const MentalPage = (() => {
-  const st = { pair: '', status: '', q: '' };
-  let el, table, saver, loadErr = null;
-  const savedOf = pid => (S.data.mental || {})[pid] || null;
-
-  function build(root) {
-    el = root;
-    el.innerHTML =
-      pageHead({
-        eyebrow: 'Korps Pengasuh // Penilaian Mental Kepribadian',
-        title: 'Nilai Mental Kepribadian',
-        desc: 'Isi skor mental kepribadian (0–100) dan catatan pembinaan untuk peserta binaan Anda. Perubahan <b>tersimpan otomatis</b>.',
-        chips: '<span class="chip ink">' + icon('lock', 'sm') + 'Akses peleton binaan</span><span class="chip red">Nilai mapel tidak dapat diakses</span>'
-      }) +
-      '<div class="grid c3 keep2" id="mt-stats"></div>' +
-      '<div class="card mt-24"><div class="toolbar">' +
-        '<div class="field"><label for="mt-pair">Kelas & Peleton</label><select id="mt-pair" class="select"></select></div>' +
-        '<div class="field narrow"><label for="mt-status">Status</label><select id="mt-status" class="select"><option value="">Semua</option><option value="empty">Belum dinilai</option><option value="saved">Tersimpan</option><option value="draft">Draf / gagal</option></select></div>' +
-        '<div class="field search"><label for="mt-q">Cari</label><div class="input-wrap">' + icon('search', 'lead') + '<input id="mt-q" class="input with-lead" placeholder="Nama atau NRP…" autocomplete="off"></div></div>' +
-      '</div><div id="mt-table"></div></div>' +
-      '<div class="sticky-bar"><div class="prog"><div class="row between"><b>Peserta dinilai</b><span class="mono" id="mt-prog-t">0/0</span></div><div class="progress"><span id="mt-prog" style="width:0"></span></div></div>' +
-        '<span class="small muted" id="mt-save-state"></span>' +
-        '<button class="btn outline" id="mt-reset">Batalkan Draf</button><button class="btn primary" id="mt-save">' + icon('save') + 'Simpan Sekarang</button></div>';
-    table = new Table($('#mt-table', el), {
-      key: 'ID_Peserta', unit: 'peserta', pageSize: 50, sizes: [25, 50, 100], sort: { key: 'Nama_Lengkap', dir: 'asc' },
-      columns: [
-        { key: 'no', label: 'No', sort: false, cls: 'no', render: (r, i) => pad2(i + 1) },
-        { key: 'Nama_Lengkap', label: 'Peserta', cls: 'card-title', render: r => '<div class="t-person"><div class="avatar sm">' + esc(initials(r.Nama_Lengkap)) + '</div><div class="t-name"><b>' + esc(r.Nama_Lengkap) + '</b><small><span class="mono">' + esc(r.NRP) + '</span> • ' + esc(pelName(r.ID_Peleton)) + '</small></div></div>' },
-        { key: 'nilai', label: 'Skor (0–100)', sort: r => { const v = cur(r.ID_Peserta).n; return v === '' ? '' : Number(v); }, render: r => '<div class="grade-cell"><input class="input grade-in' + (saver && saver.has(r.ID_Peserta) ? ' dirty' : '') + '" inputmode="decimal" maxlength="6" autocomplete="off" data-pid="' + esc(r.ID_Peserta) + '" value="' + esc(String(cur(r.ID_Peserta).n).replace('.', ',')) + '" placeholder="0–100" aria-label="Skor mental"><span class="of">/100</span></div>' },
-        { key: 'catatan', label: 'Catatan Pembinaan', sort: false, cls: 'wide', render: r => '<textarea class="textarea note-in" data-note="' + esc(r.ID_Peserta) + '" maxlength="1000" placeholder="Catatan sikap, disiplin, atau prestasi (opsional)" aria-label="Catatan">' + esc(cur(r.ID_Peserta).c) + '</textarea>' },
-        { key: 'status', label: 'Status', sort: r => statusKey(r.ID_Peserta), render: r => '<span data-st="' + esc(r.ID_Peserta) + '">' + statusHtml(r.ID_Peserta) + '</span><div class="small faint mt-8" data-at="' + esc(r.ID_Peserta) + '">' + atHtml(r.ID_Peserta) + '</div>' }
-      ],
-      empty: () => emptyState('users', 'Tidak ada peserta', st.q ? 'Tidak ada peserta yang cocok.' : 'Belum ada peserta di peleton binaan Anda.'),
-      afterRender: updateProgress
-    });
-    const host = $('#mt-table', el);
-    host.addEventListener('input', e => { if (e.target.matches('.grade-in, .note-in')) onInput(e.target.dataset.pid || e.target.dataset.note); });
-    host.addEventListener('keydown', e => {
-      if (!e.target.matches('.grade-in') || ['Enter', 'ArrowDown', 'ArrowUp'].indexOf(e.key) === -1) return;
-      e.preventDefault();
-      const ins = $$('.grade-in', host), i = ins.indexOf(e.target), n = ins[i + (e.key === 'ArrowUp' ? -1 : 1)];
-      if (n) { n.focus(); n.select(); }
-    });
-    host.addEventListener('click', e => { if (e.target.closest('[data-retry]')) load(true); });
-    $('#mt-pair', el).onchange = e => { st.pair = e.target.value; refresh(); };
-    $('#mt-status', el).onchange = e => { st.status = e.target.value; refresh(); };
-    $('#mt-q', el).addEventListener('input', debounce(e => { st.q = e.target.value; refresh(); }, 250));
-    $('#mt-save', el).onclick = () => { if (saver.count()) saver.flush(); else toast('Tidak ada perubahan', 'Semua nilai sudah tersimpan.', 'info'); };
-    $('#mt-reset', el).onclick = async () => {
-      if (!saver.count()) return toast('Tidak ada draf', 'Tidak ada perubahan yang belum tersimpan.', 'info');
-      if (await confirmBox({ title: 'Batalkan draf?', text: saver.count() + ' perubahan yang belum tersimpan akan dibuang.', okText: 'Batalkan draf', danger: true })) { saver.clear(); refresh(true); }
-    };
-    makeSaver();
-  }
-
-  function makeSaver() {
-    if (saver) return;
-    saver = new AutoSaver({
-      key: 'draft:mental', delay: 1800,
-      send: batch => api('mentalSave', { items: Object.keys(batch).map(id => ({ id, nilai: batch[id].n, catatan: batch[id].c })) }),
-      onState: id => updateRow(id),
-      onSaved: res => {
-        S.data.mental = S.data.mental || {};
-        res.data.saved.forEach(s => {
-          if (s.nilai === '' && !s.catatan) delete S.data.mental[s.id];
-          else S.data.mental[s.id] = [s.nilai, s.catatan, s.waktu, S.me.Nama_Lengkap];
-        });
-        cachePut('mental', S.data.mental);
-        S.boot.stat.mentalDone = Object.keys(S.data.mental).filter(k => S.data.mental[k][0] !== '' && S.data.mental[k][0] != null);
-        cachePut('boot', S.boot);
-        if (res.data.saved.length) toast('Nilai mental tersimpan', res.data.saved.length === 1 ? (R().peserta[res.data.saved[0].id] || {}).Nama_Lengkap || '' : res.data.saved.length + ' peserta diperbarui.');
-        updateProgress();
-      },
-      onFail: res => toast('Gagal menyimpan', res.message + ' Draf tetap aman di perangkat ini.', 'error')
-    });
-  }
-
-  function cur(pid) {
-    if (saver && saver.has(pid)) return saver.get(pid);
-    const s = savedOf(pid);
-    return { n: s && s[0] !== '' && s[0] != null ? s[0] : '', c: s ? (s[1] || '') : '' };
-  }
-  function statusKey(pid) { const s = saver ? saver.state(pid) : ''; return s || (savedOf(pid) && savedOf(pid)[0] !== '' ? 'saved' : 'empty'); }
-  function statusHtml(pid) { const s = saver ? saver.state(pid) : ''; const sv = savedOf(pid); return saveBadge(s, sv && sv[0] !== '' ? 1 : 0, saver && saver.errors[pid]); }
-  function atHtml(pid) { const s = savedOf(pid); return s ? esc(fmt.ago(s[2])) : ''; }
-
-  function onInput(pid) {
-    const inp = el.querySelector('.grade-in[data-pid="' + CSS.escape(pid) + '"]'), note = el.querySelector('[data-note="' + CSS.escape(pid) + '"]');
-    const p = parseGrade(inp.value);
-    inp.classList.toggle('invalid', !!p.error);
-    if (p.error) { saver.unset(pid); el.querySelector('[data-st="' + CSS.escape(pid) + '"]').innerHTML = saveBadge('invalid'); return; }
-    const v = { n: p.empty ? '' : p.value, c: note.value.trim() }, s = savedOf(pid);
-    const same = s ? String(s[0]) === String(v.n) && (s[1] || '') === v.c : v.n === '' && !v.c;
-    if (same) saver.unset(pid); else saver.set(pid, v);
-    inp.classList.toggle('dirty', saver.has(pid));
-    updateProgress();
-  }
-  function updateRow(pid) {
-    const sEl = el.querySelector('[data-st="' + CSS.escape(pid) + '"]');
-    if (sEl) sEl.innerHTML = statusHtml(pid);
-    const aEl = el.querySelector('[data-at="' + CSS.escape(pid) + '"]');
-    if (aEl) aEl.innerHTML = atHtml(pid);
-    const inp = el.querySelector('.grade-in[data-pid="' + CSS.escape(pid) + '"]'), note = el.querySelector('[data-note="' + CSS.escape(pid) + '"]');
-    if (inp) {
-      inp.classList.toggle('dirty', saver.has(pid));
-      if (!saver.has(pid) && document.activeElement !== inp && document.activeElement !== note) {
-        const c = cur(pid);
-        inp.value = c.n === '' ? '' : String(c.n).replace('.', ','); note.value = c.c; inp.classList.remove('invalid');
-      }
-    }
-    updateSaveState();
-  }
-  function updateSaveState() {
-    const box = $('#mt-save-state', el), n = saver.count(), err = Object.keys(saver.errors).length;
-    box.innerHTML = err ? '<span style="color:var(--red)">' + icon('alert-circle', 'sm') + ' ' + err + ' gagal disimpan</span>' :
-      n ? icon('clock', 'sm') + ' ' + n + ' perubahan menunggu disimpan' : icon('check-circle', 'sm') + ' Semua perubahan tersimpan';
-  }
-  function pairOf(p) {
-    const [k, pl] = st.pair.split('|');
-    return !st.pair || (p.ID_Kelas === k && (!pl || p.ID_Peleton === pl));
-  }
-  function updateProgress() {
-    const all = S.boot.peserta.filter(pairOf);
-    const vals = all.map(p => cur(p.ID_Peserta).n).filter(v => v !== '' && v != null);
-    $('#mt-prog-t', el).textContent = vals.length + '/' + all.length + ' (' + (all.length ? Math.round(vals.length / all.length * 100) : 0) + '%)';
-    $('#mt-prog', el).style.width = (all.length ? vals.length / all.length * 100 : 0) + '%';
-    const a = avg(vals);
-    $('#mt-stats', el).innerHTML =
-      stat({ label: 'Total Peserta Asuhan', value: all.length, unit: 'siswa', icon: 'users', cap: st.pair ? esc(pairLabel(st.pair)) : 'Semua peleton binaan' }) +
-      stat({ label: 'Sudah Dinilai', value: vals.length, unit: 'siswa', icon: 'clipboard-check', cap: (all.length - vals.length) + ' peserta belum dinilai' }) +
-      stat({ label: 'Rata-rata Skor', value: a == null ? '—' : fmt.num(a, 1), unit: a == null ? '' : '/ 100', icon: 'medal', cap: 'Dari peserta yang sudah dinilai' });
-    updateSaveState();
-  }
-  function pairLabel(v) { const [k, p] = v.split('|'); return kelasName(k) + (p ? ' — ' + pelName(p) : ' (semua peleton)'); }
-  function fillPairs() {
-    const pairs = S.boot.scope.pairs.map(a => a.k + '|' + a.p);
-    if (st.pair && pairs.indexOf(st.pair) === -1) st.pair = '';
-    $('#mt-pair', el).innerHTML = (pairs.length > 1 ? '<option value="">Semua peleton binaan</option>' : '') + pairs.map(v => '<option value="' + esc(v) + '"' + (v === st.pair ? ' selected' : '') + '>' + esc(pairLabel(v)) + '</option>').join('');
-    if (pairs.length === 1) st.pair = pairs[0];
-  }
-  function rows() {
-    const q = norm(st.q);
-    return S.boot.peserta.filter(p => {
-      if (!pairOf(p)) return false;
-      if (q && norm(p.Nama_Lengkap).indexOf(q) === -1 && String(p.NRP).indexOf(q) === -1) return false;
-      const k = statusKey(p.ID_Peserta);
-      if (st.status === 'empty' && k !== 'empty') return false;
-      if (st.status === 'saved' && k !== 'saved') return false;
-      if (st.status === 'draft' && ['draft', 'error', 'saving'].indexOf(k) === -1) return false;
-      return true;
-    });
-  }
-  function refresh(keepPage) {
-    if (!S.boot.scope.pairs.length) { $('#mt-table', el).innerHTML = emptyState('layers', 'Belum ada penugasan', 'Akun Anda belum ditugaskan ke kelas/peleton. Hubungi Admin Satdik.'); return; }
-    if (!S.data.mental) { $('#mt-table', el).innerHTML = loadErr ? errorState(loadErr) : skeletonRows(6, 4); updateProgress(); return; }
-    table.set(rows(), keepPage);
-  }
-  function load(force) {
-    loadErr = null;
-    refresh();
-    swr('mental', 'mentalList', {}, d => {
-      S.data.mental = d.mental;
-      const focused = el.contains(document.activeElement) && document.activeElement.matches('.grade-in, .note-in');
-      if (focused) { $$('.grade-in', el).forEach(i => updateRow(i.dataset.pid)); updateProgress(); } else refresh(true);
-    }, { fresh: force ? 0 : 30000, force, onError: res => { loadErr = res.message; refresh(); } });
-  }
-  return {
-    title: 'Nilai Mental Kepribadian',
-    roles: ['Pengasuh'],
-    show(root, param, o) { if (o.isNew || !table) build(root); fillPairs(); load(false); },
-    onBoot() { if (!el) return; fillPairs(); refresh(true); },
-    leave() { if (saver && saver.count()) saver.flush(); }
-  };
-})();
-page('mental', MentalPage);
 
 // ==========================================================================
 // PENGATURAN — ganti password (semua peran) + logo (Admin) (US-02, US-14)

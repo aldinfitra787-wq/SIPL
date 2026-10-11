@@ -170,7 +170,7 @@ function bindEye(btn, input) {
 // --------------------------------------------------------------------------
 function roleBadge(role) {
   const r = String(role || '');
-  const cls = r === 'Admin' ? 'admin' : r === 'Gadik' ? 'gadik' : 'pengasuh';
+  const cls = r === 'Admin' ? 'admin' : 'gadik';
   return '<span class="role ' + cls + '">' + esc(r === 'Admin' ? 'Admin Satdik' : r) + '</span>';
 }
 function statusBadge(s) { return isAktif(s) ? '<span class="badge ok">Aktif</span>' : '<span class="badge off">Nonaktif</span>'; }

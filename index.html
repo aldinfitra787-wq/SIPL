@@ -12,14 +12,14 @@
   <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="css/style.css?v=1.6.0">
-  <script src="js/config.js?v=1.6.0" defer></script>
-  <script src="js/icons.js?v=1.6.0" defer></script>
-  <script src="js/core.js?v=1.6.0" defer></script>
-  <script src="js/ui.js?v=1.6.0" defer></script>
-  <script src="js/pages.js?v=1.6.0" defer></script>
-  <script src="js/app.js?v=1.6.0" defer></script>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="css/style.css?v=1.7.0">
+  <script src="js/config.js?v=1.7.0" defer></script>
+  <script src="js/icons.js?v=1.7.0" defer></script>
+  <script src="js/core.js?v=1.7.0" defer></script>
+  <script src="js/ui.js?v=1.7.0" defer></script>
+  <script src="js/pages.js?v=1.7.0" defer></script>
+  <script src="js/app.js?v=1.7.0" defer></script>
 </head>
 <body>
 
@@ -45,8 +45,8 @@
           <div class="login-logo"><div class="inner" id="login-logo"></div></div>
           <div class="login-head">
             <div class="kicker">Portal Internal Resmi</div>
-            <h1 id="login-title">Masuk ke SIPL</h1>
-            <p>Sistem Informasi Pelatihan • SPN Polda Papua Barat</p>
+            <h1 id="login-title">Selamat Datang</h1>
+            <p>Masuk ke <em>Sistem Informasi Pelatihan</em> • SPN Polda Papua Barat</p>
           </div>
         </div>
 
@@ -73,12 +73,36 @@
           <button type="submit" class="btn primary lg block" id="lg-submit">
             <span>Masuk ke Aplikasi</span><span data-ico="arrow-right"></span>
           </button>
-          <div class="login-meta"><span data-ico="shield"></span><span>Khusus Admin Satdik, Gadik &amp; Pengasuh. Lupa password? Hubungi Admin Satdik.</span></div>
+          <div class="login-meta"><span data-ico="shield"></span><span>Khusus Admin Satdik &amp; Gadik. Lupa password? Hubungi Admin Satdik.</span></div>
           <div id="login-config" class="alert red" hidden></div>
         </form>
       </div>
       <footer class="login-foot">SPN Polda Papua Barat © <span id="login-year">2026</span> • Presisi • Disiplin • Akuntabel</footer>
     </main>
+  </div>
+
+  <!-- ===================== PROGRES MASUK (v1.7) ===================== -->
+  <!-- Muncul setelah tombol Masuk ditekan: layar login diburamkan, logo + persentase 0–100%. -->
+  <div id="login-progress" class="login-progress" role="progressbar" aria-label="Proses masuk ke SIPL" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
+    <div class="lp-card">
+      <div class="lp-emblem">
+        <svg class="lp-ring" viewBox="0 0 120 120" aria-hidden="true">
+          <defs>
+            <linearGradient id="lp-grad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#F3BF45"/><stop offset=".55" stop-color="#C8981E"/><stop offset="1" stop-color="#8A6A12"/>
+            </linearGradient>
+          </defs>
+          <circle class="lp-track" cx="60" cy="60" r="54"/>
+          <circle class="lp-arc" id="lp-ring" cx="60" cy="60" r="54" stroke="url(#lp-grad)" stroke-dasharray="339.29" stroke-dashoffset="339.29"/>
+        </svg>
+        <div class="lp-logo" id="lp-logo"></div>
+      </div>
+      <div class="lp-pct"><span id="lp-num">0</span><small>%</small></div>
+      <div class="lp-title">Sistem Informasi Pelatihan</div>
+      <div class="lp-step" id="lp-step">Menghubungkan ke server SIPL…</div>
+      <div class="lp-bar" aria-hidden="true"><span id="lp-bar"></span></div>
+      <div class="lp-foot">Presisi • Disiplin • Akuntabel</div>
+    </div>
   </div>
 
   <!-- ===================== APLIKASI (setelah login) ===================== -->

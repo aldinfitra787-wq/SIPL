@@ -1,8 +1,13 @@
 # Panduan Instalasi SIPL — SPN Polda Papua Barat
 
-**Sistem Informasi Pelatihan** • Versi 1.6.0
+**Sistem Informasi Pelatihan** • Versi 1.7.0
 
-> **Sudah memasang versi sebelumnya (1.0 – 1.3)?** Langsung ke **Bagian G — Memperbarui Versi**. Data Anda tetap aman dan database diperbarui otomatis.
+> **Sudah memasang versi sebelumnya (1.0 – 1.6)?** Langsung ke **Bagian G — Memperbarui Versi**. Data Anda tetap aman dan database diperbarui otomatis.
+
+### Yang baru di versi 1.7 — progres masuk, tanpa Pengasuh, tipografi elegan
+- **Progres persen saat masuk**: setelah tombol *Masuk* ditekan, layar login **diburamkan** dan muncul **logo website** di dalam cincin emas beserta **persentase 0–100 %** dan keterangan tahap (*Menghubungkan ke server → Memverifikasi akun → Memuat data → Selamat datang*). Bila password salah, layar kembali tajam dan pesan kesalahan tampil. Lihat **Bagian L**.
+- **Peran Pengasuh dihapus** beserta semua yang berkaitan: menu & halaman *Nilai Mental*, dashboard Pengasuh, pilihan peran Pengasuh di formulir akun, peleton binaan pada penugasan, tab *Nilai Mental* di Rekap Harian, dan impor *Data Pengasuh / Nilai Mental*. Akun yang dapat dibuat kini hanya **Gadik**. Akun Pengasuh dari database lama tidak bisa masuk lagi. Untuk membersihkan sisa datanya dari database, jalankan fungsi **`hapusDataPengasuh`** sekali (lihat **Bagian L**).
+- **Tipografi elegan**: judul halaman, judul kartu, angka statistik, nama aplikasi, dan halaman login memakai huruf serif **Playfair Display** dengan aksen emas. Label kecil (eyebrow) berwarna gradasi emas, dan ada garis emas di bawah judul halaman.
 
 ### Yang baru di versi 1.6 — jadwal PDF, pas foto, animasi
 - **Jadwal Pelatihan (PDF)**: Admin mengunggah PDF jadwal di menu **Jadwal Pelajaran**. Dokumen itu tampil sebagai **kartu ringkasan** di dashboard **Gadik** dan **Pengasuh** (tombol *Buka Jadwal PDF* & *Unduh PDF*). Lihat **Bagian J**.
@@ -101,7 +106,7 @@ Frontend berbicara dengan backend lewat internet (URL `/exec`). Semua pembatasan
 
 > ⚠️ Jangan menjalankan `setupAppEnvironment` lebih dari sekali. Bila dijalankan lagi, setup akan menolak agar tidak membuat database ganda.
 
-**Opsional — data contoh untuk uji coba:** pilih fungsi `isiDataContoh` → ▶ Jalankan. Ini mengisi 2 kelas, 4 peleton, 4 mapel, 2 Gadik (`bambang` / `gadik12345`), 2 Pengasuh (`hendra` / `pengasuh123`), 4 sesi jadwal, dan 24 peserta. **Pakai hanya untuk instalasi uji coba** — akun contoh memiliki password yang tertulis di panduan ini. Untuk instalasi sungguhan, lewati langkah ini.
+**Opsional — data contoh untuk uji coba:** pilih fungsi `isiDataContoh` → ▶ Jalankan. Ini mengisi 2 kelas, 4 peleton, 4 mapel, 2 Gadik (`bambang` dan `irwan`, password `gadik12345`), 4 sesi jadwal, dan 24 peserta. **Pakai hanya untuk instalasi uji coba** — akun contoh memiliki password yang tertulis di panduan ini. Untuk instalasi sungguhan, lewati langkah ini.
 
 ### A4. Deploy sebagai Web App
 1. Klik **Terapkan (Deploy)** → **Deployment baru**.
@@ -184,7 +189,7 @@ Tunggu 1–2 menit → muncul **"Your site is live at https://USERNAME.github.io
    1. **Angkatan & Kelas** (mis. *Pelatihan Gelombang I 2026 — Kelas A*).
    2. **Peleton** per kelas.
    3. **Mata Pelajaran**.
-4. **Personel & Akun → Tambah Akun** untuk setiap Gadik dan Pengasuh, sekaligus pilih kelas/peleton yang diampu.
+4. **Personel & Akun → Tambah Akun** untuk setiap Gadik, sekaligus pilih kelas yang diampu.
 5. **Jadwal Pelajaran → Tambah Jadwal Mapel**, untuk setiap mata pelajaran:
    - pilih **Kelas**, **Mata pelajaran**, **Gadik pengampu**;
    - **Tanggal mulai** (Senin) — tanggal selesai otomatis Sabtu (6 hari); hari pelaksanaan Senin–Sabtu sudah tercentang;
@@ -193,7 +198,7 @@ Tunggu 1–2 menit → muncul **"Your site is live at https://USERNAME.github.io
 
    Mapel berikutnya dijadwalkan di pekan berikutnya. Sistem memperingatkan bila kelas atau Gadik yang sama dijadwalkan pada tanggal & jam yang sama. Jadwal inilah yang menentukan mapel yang muncul di Input Nilai Harian milik Gadik pada tiap tanggal.
 6. Bagikan alamat aplikasi + username/password awal ke masing-masing personel.
-7. Gadik mengisi **Peserta Pelatihan** kelasnya, lalu **Input Nilai Harian** setiap selesai mengajar. Pengasuh mengisi **Nilai Mental**.
+7. Gadik mengisi **Peserta Pelatihan** kelasnya, lalu **Input Nilai Harian** setiap selesai mengajar.
 
 ### Alur Input Nilai Harian (Gadik)
 
@@ -217,17 +222,18 @@ Tunggu 1–2 menit → muncul **"Your site is live at https://USERNAME.github.io
 
 ### Hak akses per peran (ditegakkan server)
 
-| Menu | Admin Satdik | Gadik | Pengasuh |
-|---|---|---|---|
-| Dashboard | ringkasan semua kelas | kelasnya | peleton binaannya |
-| Peserta Pelatihan | lihat + hapus semua kelas | tambah/ubah/hapus di kelasnya | lihat peletonnya |
-| Personel & Akun, Master Data, Migrasi | ✔ | — | — |
-| Jadwal | atur + deteksi bentrok | lihat kelasnya | lihat kelasnya |
-| Input Nilai Harian (+ unduh lembar) | — | ✔ sesi yang ia ajar | — |
-| Nilai Mental | — | — | ✔ peletonnya |
-| Rekap Harian + Buka kunci / Hapus sesi | ✔ semua kelas | — | — |
-| Rekap Akhir (+ unduh PDF/Excel) | ✔ semua kelas | ✔ kelasnya | — |
-| Pengaturan | password + logo | password | password |
+| Menu | Admin Satdik | Gadik |
+|---|---|---|
+| Dashboard | ringkasan semua kelas | kelasnya |
+| Peserta Pelatihan | lihat + hapus semua kelas | tambah/ubah/hapus di kelasnya |
+| Personel & Akun, Master Data, Migrasi | ✔ | — |
+| Jadwal | atur + deteksi bentrok | lihat kelasnya |
+| Input Nilai Harian (+ unduh lembar) | — | ✔ sesi yang ia ajar |
+| Rekap Harian + Buka kunci / Hapus sesi | ✔ semua kelas | — |
+| Rekap Akhir (+ unduh PDF/Excel) | ✔ semua kelas | ✔ kelasnya |
+| Pengaturan | password + logo + pas foto | password + pas foto |
+
+Sejak v1.7 hanya ada dua peran: **Admin Satdik** dan **Gadik**.
 
 ---
 
@@ -251,17 +257,17 @@ Dipakai untuk memindahkan data dari **database SIPL lama** atau **spreadsheet bu
 | `Peleton` | Kelas, Peleton |
 | `Mapel` / `Mata_Pelajaran` | Mata Pelajaran, Bobot/JP |
 | `Users` / `Akun` | Username, Nama, Peran |
-| `Gadik` / `Pengasuh` | Username, Nama, Pangkat/NRP, HP |
+| `Gadik` | Username, Nama, Pangkat/NRP, HP |
 | `Jadwal` | Kelas, Mapel, Gadik, Hari (mis. `Senin - Sabtu` atau `Senin, Selasa`), Jam Mulai, Jam Selesai, Ruang, Tanggal Mulai, Tanggal Selesai, Tutup Jumat (Ya/kosong). Jadwal tanpa tanggal dianggap jadwal lama yang berulang tiap pekan. |
 | `Nilai` / `Nilai_Harian` | NRP, Mapel, **A1 A2 A3 B1 B2 C1 C2** (0–10) — atau satu kolom **Nilai** (0–100) — Tanggal (opsional), Waktu (opsional) |
 | `Sesi_Nilai` (database SIPL 1.1/1.2) | semua kolom asli |
-| `Nilai_Mental` | NRP, Nilai, Catatan |
 
 Aturan pengaman:
 - Spreadsheet sumber **hanya dibaca**, tidak pernah diubah.
 - Aman diulang: data yang sudah ada tidak dibuat ganda (kunci: NRP untuk peserta, username untuk akun, peserta+mapel+tanggal untuk nilai).
 - Nilai hasil import **langsung dihitung di rekap**. Bila kolom Tanggal kosong, dipakai tanggal dari kolom Waktu (atau tanggal import).
 - Sumber yang hanya punya satu angka **Nilai** 0–100 diimpor sebagai butir A1–C2 = Nilai ÷ 10, sehingga nilai akhirnya tetap sama.
+- Akun **Admin** dan akun **Pengasuh** dari sumber tidak diimpor (peran Pengasuh sudah dihapus). Sheet *Data Pengasuh* / *Nilai Mental* di sumber diabaikan.
 - Akun **Admin** dari sumber tidak diimpor. **Status akun dan password** di aplikasi ini tidak ditimpa.
 - NRP yang kehilangan angka 0 di depan (mis. `3051004`) dipulihkan menjadi 8 digit (`03051004`).
 - Akun dari sumber yang tidak membawa hash password diberi password acak → **Reset Password** di menu Personel & Akun.
@@ -285,7 +291,7 @@ Tunggu 1–2 menit; bila tampilan masih lama tekan **Ctrl + Shift + R**.
 
 ---
 
-## Bagian G — Memperbarui Versi (1.0 – 1.3 → 1.4)
+## Bagian G — Memperbarui Versi (1.0 – 1.6 → 1.7)
 
 Lakukan saat aplikasi sepi (mis. sore hari). Data lama **tidak dihapus**. Langkahnya sama dari versi mana pun.
 
@@ -294,6 +300,7 @@ Lakukan saat aplikasi sepi (mis. sore hari). Data lama **tidak dihapus**. Langka
 2. Berkas **Kode** → hapus seluruh isinya → tempel isi `Kode.gs` versi terbaru. Lakukan hal yang sama untuk **Migrasi** (`Migrasi.gs`). Tekan **Ctrl + S**.
 3. **Terapkan → Kelola deployment → ✏️ Edit → Versi: Versi baru → Terapkan.** (URL `/exec` tetap sama.)
 4. Database diperbarui **otomatis** pada permintaan pertama (mis. saat ada yang login). Pembaruan ini:
+   - (v1.7) tidak membuat sheet baru; sheet lama `Data_Pengasuh` & `Nilai_Mental` tidak dipakai lagi dan **tidak dihapus otomatis** (bersihkan dengan `hapusDataPengasuh` bila diinginkan — Bagian L),
    - membuat sheet **`Dokumen_Jadwal`** dan **`Foto_Akun`**, serta kolom **`Foto_Ver`** di sheet `Users` (v1.6),
    - menambah kolom **`Tanggal_Mulai`**, **`Tanggal_Selesai`**, **`Tutup_Jumat`** di sheet `Jadwal`,
    - membuat sheet baru **`Sesi_Nilai`** (status tiap sesi penilaian: Draf/Selesai) bila belum ada, dan **`Logo_Aplikasi`** (tempat menyimpan logo),
@@ -305,17 +312,18 @@ Lakukan saat aplikasi sepi (mis. sore hari). Data lama **tidak dihapus**. Langka
 
 **2. Frontend**
 1. Simpan dulu nilai `GAS_URL` dari `js/config.js` lama Anda.
-2. Ekstrak `sipl-frontend.zip` versi 1.4, lalu **salin seluruh isinya menimpa** isi folder repository lama Anda (`index.html`, `css`, `js`, `img`, dan berkas `.md`).
+2. Ekstrak `sipl-frontend.zip` versi 1.7, lalu **salin seluruh isinya menimpa** isi folder repository lama Anda (`index.html`, `css`, `js`, `img`, dan berkas `.md`).
 3. Buka `js/config.js` yang baru → isi kembali `GAS_URL` yang tadi disimpan.
 4. Kirim ke GitHub:
    ```bash
    git add .
-   git commit -m "SIPL 1.4 - jadwal 6 hari, tanda tangan Gadik, A4 potrait"
+   git commit -m "SIPL 1.7 - progres login, tanpa Pengasuh, tipografi elegan"
    git push
    ```
 5. Tunggu 1–2 menit. Berkas versi baru otomatis dimuat (tidak perlu hapus cache); bila tampilan masih lama, tekan **Ctrl + Shift + R**.
 
 **Catatan pembaruan**
+- **v1.7**: akun Pengasuh lama tidak dapat masuk lagi. Beritahukan kepada para Pengasuh bila perlu. Huruf *Playfair Display* dimuat dari Google Fonts; bila jaringan memblokirnya, judul memakai huruf serif bawaan perangkat (Georgia/Times) dan tampilan tetap rapi.
 - **Jadwal lama** (dibuat sebelum v1.4, berulang tiap pekan tanpa tanggal) **tetap berjalan** dan ditandai *Format lama* di tampilan Daftar. Saat diubah, lengkapi tanggal pelaksanaan dan jam 08.00–17.00. Untuk mapel berikutnya, buat jadwal baru dengan tanggal mulai — lalu hapus jadwal lama bila sudah tidak dipakai (hati-hati: nilai sesi jadwal itu ikut terhapus).
 - **Logo lama (v1.0–1.2)** yang diunggah lewat Google Drive tetap tampil. Untuk memakai cara penyimpanan baru (lebih andal), unggah ulang logo di **Pengaturan**.
 - Kolom `Jenis_Pendidikan` di sheet `Angkatan_Kelas` tidak dipakai lagi. Boleh dibiarkan atau dihapus manual.
@@ -338,18 +346,16 @@ Semua tabel punya tombol **🗑 Hapus** di kolom **Aksi**. Tidak ada lagi tombol
 | Yang dihapus | Ikut terhapus |
 |---|---|
 | **Akun Gadik** (Personel & Akun) | data Gadik, penugasan, **semua jadwal mengajarnya**, sesi penilaian & **nilai harian mata pelajaran yang ia ajar**. Sesi login Gadik itu langsung berakhir. |
-| **Akun Pengasuh** | data Pengasuh dan penugasannya. Nilai mental peserta tetap ada. |
-| **Kelas** (Master Data) | peleton, peserta, jadwal, penugasan, sesi penilaian, nilai harian, dan nilai mental di kelas itu |
-| **Peleton** | peserta di peleton itu (beserta nilainya), penugasan Pengasuh di peleton itu, nilai mental |
+| **Kelas** (Master Data) | peleton, peserta, jadwal, penugasan, sesi penilaian, dan nilai harian di kelas itu |
+| **Peleton** | peserta di peleton itu beserta nilainya |
 | **Mata Pelajaran** | semua jadwal mapel itu, sesi penilaian, dan nilai hariannya |
-| **Penugasan** | hanya penugasan itu (personel tidak lagi melihat kelas/peleton tersebut) |
+| **Penugasan** | hanya penugasan itu (Gadik tidak lagi melihat kelas tersebut) |
 | **Jadwal** | sesi penilaian & nilai harian dari jadwal itu |
-| **Peserta** (Admin, atau Gadik di kelasnya) | nilai harian dan nilai mental peserta itu. Jumlah "Dinilai" tiap sesi dihitung ulang. |
+| **Peserta** (Admin, atau Gadik di kelasnya) | nilai harian peserta itu. Jumlah "Dinilai" tiap sesi dihitung ulang. |
 | **Sesi penilaian** (Rekap Harian) | semua nilai harian sesi itu, sehingga hari itu keluar dari Rekap Akhir |
-| **Nilai mental** (Rekap Harian → Nilai Mental) | nilai mental peserta itu |
 
 **Pengaman**
-- Akun Admin tidak bisa dihapus. Pengasuh tidak punya tombol hapus. Gadik hanya bisa menghapus peserta di kelas penugasannya.
+- Akun Admin tidak bisa dihapus. Gadik hanya bisa menghapus peserta di kelas penugasannya.
 - Bila tombol Hapus tertekan dua kali atau koneksi putus, data tidak terhapus dua kali.
 - **Salah hapus?** Database dicadangkan otomatis setiap hari pukul 02.00 WIT di folder **Cadangan Harian** (14 salinan terakhir). Buka salinan terbaru, lalu salin baris yang terhapus ke database. Untuk menghapus data dalam jumlah besar, jalankan dulu `backupHarian` di editor Apps Script agar cadangannya paling baru.
 
@@ -357,7 +363,7 @@ Semua tabel punya tombol **🗑 Hapus** di kolom **Aksi**. Tidak ada lagi tombol
 
 ## Bagian I — Mengganti Logo Website
 
-Logo tampil di **halaman login** (lingkaran besar dan pojok kiri atas), **menu samping**, dan **ikon tab browser**.
+Logo tampil di **halaman login**, **layar progres masuk** (di tengah cincin emas), **menu samping**, dan **ikon tab browser**.
 
 ### Cara 1 — lewat aplikasi (disarankan)
 1. Masuk sebagai **Admin** → menu **Pengaturan** → kartu **Logo Website**.
@@ -402,19 +408,40 @@ Logo dari **Pengaturan** (Cara 1) selalu diutamakan. Urutannya: logo dari Pengat
 
 Tombol ✏️ untuk mengubah judul/kelas atau mengganti berkas, 🗑 untuk menghapus. Berkas disimpan di folder Google Drive **📂 Dokumen Jadwal Pelatihan** (dibuat otomatis saat unggahan pertama) dan **tidak perlu dibagikan publik**: aplikasi mengirimkannya hanya kepada pengguna yang sudah login.
 
-**Gadik & Pengasuh melihat**
+**Gadik melihat**
 - Dashboard menampilkan kartu ringkasan **Jadwal Pelatihan (PDF)** berisi dokumen terbaru → **Buka Jadwal PDF** (penampil PDF di dalam aplikasi) atau **Unduh PDF**. Bila ada beberapa dokumen, tombol *Semua dokumen* menampilkan daftarnya.
 - Di HP, PDF dibuka dengan penampil PDF bawaan HP (tombol *Buka PDF*).
-- Gadik/Pengasuh hanya melihat dokumen **umum** dan dokumen untuk **kelas penugasannya**. Dokumen yang sama juga tampil di menu **Jadwal Pelajaran** mereka.
+- Gadik hanya melihat dokumen **umum** dan dokumen untuk **kelas penugasannya**. Dokumen yang sama juga tampil di menu **Jadwal Pelajaran** mereka.
 
 ---
 
 ## Bagian K — Pas Foto 4 × 6
 
-- **Foto sendiri** (Admin, Gadik, Pengasuh): menu **Pengaturan** → kartu **Pas Foto 4 × 6** → **Ganti Pas Foto**.
+- **Foto sendiri** (Admin & Gadik): menu **Pengaturan** → kartu **Pas Foto 4 × 6** → **Ganti Pas Foto**.
 - **Foto akun lain** (khusus Admin): **Personel & Akun** → tombol 📷 pada baris akun, atau buka formulir **Ubah akun** → klik kotak **Pas Foto 4×6**.
 
 Ketentuan: format **JPEG/JPG** saja (PNG ditolak). Foto otomatis **dipotong ke rasio 4 × 6 (potret)** dan diperkecil menjadi 400 × 600 piksel sebelum disimpan; geser slider **Geser posisi foto** bila wajah kurang di tengah. Pas foto tampil di menu samping, bilah atas, daftar personel, dan penugasan. Tombol **Hapus Foto** mengembalikan tampilan inisial nama. Menghapus akun ikut menghapus pas fotonya.
+
+---
+
+## Bagian L — Progres Masuk & Penghapusan Peran Pengasuh (v1.7)
+
+**Progres saat masuk**
+1. Isi username & password → **Masuk ke Aplikasi**.
+2. Layar login langsung **diburamkan**. Di tengah layar tampil **logo website** (logo yang diatur di *Pengaturan → Logo Website*, atau perisai bawaan) di dalam cincin emas, angka **persen**, bilah progres, dan keterangan tahap:
+   | Persen | Tahap |
+   |---|---|
+   | 0–30 % | Menghubungkan ke server SIPL |
+   | 30–70 % | Memverifikasi akun & kata sandi |
+   | 70–95 % | Memuat data kelas / modul administrator |
+   | 100 % | *Selamat datang, (nama)* → dashboard terbuka, efek buram memudar |
+3. Bila username/password salah atau server tidak terjangkau, progres ditutup, layar kembali tajam, dan pesan kesalahan tampil di atas formulir.
+4. Pada perangkat yang diatur **kurangi gerakan**, persen tetap tampil tanpa animasi.
+
+**Peran Pengasuh sudah dihapus**
+- Di aplikasi: menu **Nilai Mental**, dashboard Pengasuh, pilihan peran Pengasuh, peleton binaan, tab Nilai Mental di Rekap Harian, dan impor data Pengasuh/Nilai Mental sudah tidak ada.
+- Akun Pengasuh lama tidak dapat masuk (pesan: *Peran Pengasuh sudah tidak digunakan di SIPL*). Sesi Pengasuh yang masih terbuka di perangkat langsung dikembalikan ke halaman login.
+- Data lama **tidak dihapus otomatis**. Untuk membersihkannya: buka editor Apps Script → pilih fungsi **`hapusDataPengasuh`** → ▶ **Jalankan**. Fungsi ini menghapus akun ber-peran Pengasuh beserta penugasan & pas fotonya, lalu menghapus sheet `Data_Pengasuh` dan `Nilai_Mental`. Bila ingin menyimpan arsip nilai mental, unduh dulu sheet `Nilai_Mental` (File → Download → Excel) sebelum menjalankan fungsi ini.
 
 ---
 
@@ -427,6 +454,7 @@ Ketentuan: format **JPEG/JPG** saja (PNG ditolak). Foto otomatis **dipotong ke r
 | `perbaikiSheet` | Membuat ulang sheet/kolom/format yang hilang (data tetap aman). Juga dipakai saat memperbarui dari v1.0 |
 | `pasangTrigger` | Memasang ulang trigger log, cadangan harian, dan penyegar cache |
 | `backupHarian` | Membuat cadangan database sekarang juga |
+| `hapusDataPengasuh` | (v1.7, opsional, sekali saja) menghapus sisa akun Pengasuh beserta penugasan & pas fotonya, lalu sheet `Data_Pengasuh` dan `Nilai_Mental` dari database lama |
 
 Cadangan otomatis tersimpan di folder **Cadangan Harian** (14 salinan terakhir).
 
@@ -438,7 +466,8 @@ Cadangan otomatis tersimpan di folder **Cadangan Harian** (14 salinan terakhir).
 |---|---|---|
 | Login | password salah 5× | pesan umum, lalu akun terkunci 15 menit |
 | Hak akses | login Gadik, buka alamat `#/personel` | dialihkan ke Dashboard |
-| Hak akses | login Pengasuh, buka `#/nilai` | dialihkan ke Dashboard |
+| Login | masukkan username & password benar → **Masuk** | layar login buram, logo + persen 0–100 % tampil, lalu dashboard terbuka |
+| Hak akses | login dengan akun Pengasuh lama | ditolak: *Peran Pengasuh sudah tidak digunakan* |
 | Data | Gadik menambah peserta dengan NRP yang sudah ada | ditolak dengan alasan |
 | Nilai | Gadik membuka Input Nilai Harian pada hari mengajar | hanya sesi miliknya yang tampil sebagai kartu pilihan |
 | Nilai | ketik 12 pada butir A1 | ditandai "Harus 0–10", tidak dikirim |
@@ -454,7 +483,7 @@ Cadangan otomatis tersimpan di folder **Cadangan Harian** (14 salinan terakhir).
 | Jadwal | jadwalkan 1 Gadik di 2 kelas pada pekan yang sama | peringatan bentrok |
 | Penutupan Jumat | centang opsi di jadwal, login Gadik hari Jumat | dashboard menampilkan *Isi nilai Sabtu*; lembar HARI 6 bisa diisi |
 | Unduh | Unduh PDF lembar harian / Rekap Akhir | A4 potrait, kolom tanda tangan Gadik di kanan bawah |
-| Jadwal PDF | Admin unggah PDF jadwal → login Gadik/Pengasuh | kartu *Jadwal Pelatihan (PDF)* di dashboard; PDF bisa dibuka & diunduh |
+| Jadwal PDF | Admin unggah PDF jadwal → login Gadik | kartu *Jadwal Pelatihan (PDF)* di dashboard; PDF bisa dibuka & diunduh |
 | Pas foto | Pengaturan → Ganti Pas Foto (JPG) | foto 4 × 6 tampil di menu & bilah atas; PNG ditolak |
 | Logo | Pengaturan → pilih logo → Simpan Logo | logo tampil di menu, halaman login, dan ikon tab; buka di HP → logo sama |
 | Hapus | Master Data → Mata Pelajaran → 🗑 pada mapel yang sudah dinilai | dialog menampilkan jadwal & nilai yang ikut terhapus; tombol aktif setelah dicentang |
