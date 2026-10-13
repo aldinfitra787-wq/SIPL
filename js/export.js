@@ -144,6 +144,10 @@
       '<sheetData>' + body + '</sheetData>' +
       (sh.merges && sh.merges.length ? '<mergeCells count="' + sh.merges.length + '">' + sh.merges.map(function (m) { return '<mergeCell ref="' + m + '"/>'; }).join('') + '</mergeCells>' : '') +
       (sh.validations && sh.validations.length ? '<dataValidations count="' + sh.validations.length + '">' + sh.validations.map(function (v) {
+        if (v.type === 'decimal') {
+          return '<dataValidation type="decimal" operator="between" allowBlank="1" showInputMessage="1" showErrorMessage="1"' + (v.prompt ? ' promptTitle="' + xesc(v.prompt[0]) + '" prompt="' + xesc(v.prompt[1]) + '"' : '') +
+            ' errorTitle="Nilai tidak valid" error="' + xesc(v.error || 'Isi angka.') + '" sqref="' + v.sqref + '"><formula1>' + v.min + '</formula1><formula2>' + v.max + '</formula2></dataValidation>';
+        }
         return '<dataValidation type="list" allowBlank="1" showInputMessage="1" showErrorMessage="' + (v.strict ? 1 : 0) + '"' + (v.prompt ? ' promptTitle="' + xesc(v.prompt[0]) + '" prompt="' + xesc(v.prompt[1]) + '"' : '') +
           (v.strict ? ' errorTitle="Pilihan tidak dikenal" error="' + xesc(v.error || 'Pilih dari daftar.') + '"' : '') + ' sqref="' + v.sqref + '"><formula1>' + xesc(v.formula) + '</formula1></dataValidation>';
       }).join('') + '</dataValidations>' : '') +
@@ -674,6 +678,46 @@
   function xmlDoc(s) { return new DOMParser().parseFromString(s, 'application/xml'); }
   function byTag(node, tag) { return Array.from(node.getElementsByTagName(tag)).concat(Array.from(node.getElementsByTagNameNS ? node.getElementsByTagNameNS('*', tag) : [])).filter(function (x, i, a) { return a.indexOf(x) === i; }); }
   function colIndex(refStr) { const m = /^([A-Z]+)/.exec(refStr || ''); let n = 0; if (!m) return -1; for (const ch of m[1]) n = n * 26 + ch.charCodeAt(0) - 64; return n - 1; }
+  function bacaSheet(sx, shared) {
+    const out = [];
+    byTag(xmlDoc(sx), 'row').forEach(function (rowEl) {
+      const r = Number(rowEl.getAttribute('r')) - 1, row = [];
+      byTag(rowEl, 'c').forEach(function (c, ci) {
+        const col = c.getAttribute('r') ? colIndex(c.getAttribute('r')) : ci, t = c.getAttribute('t');
+        const vEl = byTag(c, 'v')[0], v = vEl ? vEl.textContent : '';
+        let val = '';
+        if (t === 's') val = shared[Number(v)] || '';
+        else if (t === 'inlineStr') val = byTag(c, 't').map(function (x) { return x.textContent; }).join('');
+        else if (t === 'str' || t === 'e') val = v;
+        else if (t === 'b') val = v === '1' ? 'TRUE' : 'FALSE';
+        else val = v === '' ? '' : Number(v);
+        row[col] = val;
+      });
+      out[r >= 0 ? r : out.length] = row;
+    });
+    for (let i = 0; i < out.length; i++) if (!out[i]) out[i] = [];
+    return out;
+  }
+  /** Semua sheet terlihat → [{ name, rows }] (urut sesuai buku kerja). */
+  async function bacaXlsxSemua(buf) {
+    const z = await unzip(buf);
+    const ssTxt = await z.text('xl/sharedStrings.xml'), shared = [];
+    if (ssTxt) byTag(xmlDoc(ssTxt), 'si').forEach(function (si) { shared.push(byTag(si, 't').map(function (t) { return t.textContent; }).join('')); });
+    const wb = xmlDoc(await z.text('xl/workbook.xml')), relTxt = await z.text('xl/_rels/workbook.xml.rels'), rels = relTxt ? xmlDoc(relTxt) : null;
+    const out = [];
+    for (const sh of byTag(wb, 'sheet')) {
+      if (sh.getAttribute('state') === 'hidden' || sh.getAttribute('state') === 'veryHidden') continue;
+      const rid = sh.getAttribute('r:id') || sh.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
+      const rel = rels && byTag(rels, 'Relationship').find(function (r) { return r.getAttribute('Id') === rid; });
+      if (!rel) continue;
+      const tg = rel.getAttribute('Target');
+      const path = tg.charAt(0) === '/' ? tg.slice(1) : 'xl/' + tg.replace(/^\.\//, '');
+      const sx = await z.text(path);
+      if (sx) out.push({ name: sh.getAttribute('name'), rows: bacaSheet(sx, shared) });
+    }
+    if (!out.length) throw new Error('Sheet data tidak ditemukan di berkas Excel.');
+    return out;
+  }
   async function bacaXlsx(buf) {
     const z = await unzip(buf);
     const ssTxt = await z.text('xl/sharedStrings.xml'), shared = [];
@@ -723,6 +767,13 @@
     if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
     return rows;
   }
+  /** Berkas (File) → semua sheet [{ name, rows }]. CSV = satu sheet. */
+  async function bacaBerkasSemua(file) {
+    const name = String(file.name || '').toLowerCase();
+    if (/\.xls$/.test(name)) throw new Error('Format .xls (Excel 97–2003) belum didukung. Buka berkas di Excel lalu Simpan Sebagai → Excel Workbook (.xlsx).');
+    if (/\.(csv|txt)$/.test(name)) return [{ name: file.name, rows: bacaCsv(await file.text()) }];
+    return bacaXlsxSemua(await file.arrayBuffer());
+  }
   /** Berkas (File) → array baris (sel: string atau number). */
   async function bacaBerkas(file) {
     const name = String(file.name || '').toLowerCase();
@@ -731,7 +782,75 @@
     return bacaXlsx(await file.arrayBuffer());
   }
 
+  // ==========================================================================
+  // TEMPLATE IMPORT NILAI HARIAN (v2.0): satu sheet per HARI, format sama dengan lembar harian,
+  // sel butir dibatasi 0–10, kode sesi tertulis di bagian info agar dapat diimpor kembali.
+  // ==========================================================================
+  function nilaiTemplateXlsx(d) {
+    const A = aspekOf(d.format);
+    const sheets = d.hari.map(function (h) {
+      const sh = lembarHari({ judul: h.judul || 'PENILAIAN HARIAN PESERTA PELATIHAN', instansi: d.instansi, info: h.info, format: d.format, peserta: h.peserta, nilai: h.nilai, ttd: h.ttd }, h.label);
+      const n = Math.max(1, h.peserta.length), sq = [];
+      let c = 3;
+      A.forEach(function (g) { g.butir.forEach(function () { sq.push(ref(c, BODY_ROW) + ':' + ref(c, BODY_ROW + n - 1)); c++; }); c++; });
+      sh.validations = [{ type: 'decimal', min: 0, max: d.format.SKOR_MAX, sqref: sq.join(' '), prompt: ['Skor butir', 'Isi angka 0–' + d.format.SKOR_MAX + ' (desimal pakai koma/titik).'], error: 'Skor harus angka 0–' + d.format.SKOR_MAX + '.' }];
+      if (h.terkunci) sh.rows[KOP + 2] = [{ v: 'LEMBAR INI SUDAH DIKIRIM KE REKAP (TERKUNCI) — perubahan di lembar ini tidak akan diterima.', s: X.note }];
+      sh.active = false;
+      return sh;
+    });
+    if (sheets.length) sheets[0].active = true;
+    const P = [[{ v: 'PETUNJUK PENGISIAN NILAI HARIAN', s: X.judulL }]];
+    let r = 2;
+    (d.petunjuk || []).forEach(function (t, i) { P[r++] = [{ v: (i + 1) + '. ' + t, s: X.wrap }]; });
+    return xlsx(sheets.concat([{ name: 'PETUNJUK', cols: [110], rows: P }]));
+  }
+
+  // ==========================================================================
+  // LAPORAN PERINGKAT SATU (v2.0) — PDF A4 potrait
+  // d: { judul, instansi, ringkas, info, kelas: [{ judul, sub, nama, pn, na, tabel: { head, body }, alasan:[], catatan:[], kesimpulan }] }
+  // ==========================================================================
+  function juaraPdf(d) {
+    const pdf = new Pdf(false), M = pdf.M, Wt = pdf.W - M * 2;
+    judulPdf(pdf, d, true);
+    const butuh = function (h) { if (pdf.y + h > pdf.H - M - 16) { pdf.add(); judulPdf(pdf, d, false); } };
+    const para = function (t, size, bold, indent, bullet) {
+      const lines = wrap(t, size, bold, Wt - (indent || 0) - (bullet ? 10 : 0));
+      lines.forEach(function (l, i) {
+        butuh(size + 4);
+        if (bullet && i === 0) pdf.text(M + (indent || 0), pdf.y + size, bullet, size, bold, 'l');
+        pdf.text(M + (indent || 0) + (bullet ? 10 : 0), pdf.y + size, l, size, bold, 'l');
+        pdf.y += size + 3.5;
+      });
+    };
+    d.kelas.forEach(function (k, ki) {
+      butuh(150);
+      if (ki) pdf.y += 10;
+      pdf.rect(M, pdf.y, Wt, 22, '0.361 0.078 0.078', false);
+      pdf.ops.push('1 g');
+      pdf.ops.push('BT /F2 10.5 Tf ' + f2(M + 8) + ' ' + f2(pdf.H - pdf.y - 15) + ' Td ' + pstr(k.judul) + ' Tj ET');
+      pdf.y += 28;
+      if (k.kosong) { para(k.kosong, 9, false); return; }
+      pdf.text(M, pdf.y + 12, 'PERINGKAT 1', 8, true, 'l', true);
+      pdf.text(M, pdf.y + 27, k.nama, 13, true, 'l');
+      pdf.text(M, pdf.y + 40, k.pn, 9, false, 'l', true);
+      pdf.text(pdf.W - M, pdf.y + 12, 'NIL AKHIR', 8, true, 'r', true);
+      pdf.text(pdf.W - M, pdf.y + 33, k.na, 20, true, 'r');
+      pdf.y += 50;
+      if (k.sub) para(k.sub, 8.5, false);
+      pdf.y += 4;
+      butuh(20 + k.tabel.body.length * 15);
+      table(pdf, { widths: k.tabel.widths, head: [k.tabel.head.map(function (t) { return { t: t }; })], body: k.tabel.body, align: k.tabel.align, size: 8, rowH: 15, headH: 17 });
+      pdf.y += 8;
+      para('ALASAN MERAIH PERINGKAT 1', 9, true);
+      k.alasan.forEach(function (t, i) { para(t, 8.8, false, 4, (i + 1) + '.'); });
+      if (k.catatan && k.catatan.length) { pdf.y += 4; para('EVALUASI & SARAN PEMBINAAN', 9, true); k.catatan.forEach(function (t) { para(t, 8.8, false, 4, '-'); }); }
+      if (k.kesimpulan) { pdf.y += 4; para('KESIMPULAN', 9, true); para(k.kesimpulan, 8.8, false, 4); }
+    });
+    return pdf.blob(footerFn(d));
+  }
+
   window.Ekspor = {
+    nilaiTemplateXlsx: nilaiTemplateXlsx, juaraPdf: juaraPdf, bacaBerkasSemua: bacaBerkasSemua,
     tabelXlsx: tabelXlsx, bacaBerkas: bacaBerkas, _bacaXlsx: bacaXlsx, _bacaCsv: bacaCsv,
     tglPanjang: tglPanjang, hitungAkhir: hitungAkhir,
     /** d: { judul, instansi, info:[[label, nilai]], ringkas, format, peserta:[{nama, pn}], nilai:[[7 butir]] } */

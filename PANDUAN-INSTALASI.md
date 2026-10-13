@@ -1,8 +1,13 @@
 # Panduan Instalasi SIPL — SPN Polda Papua Barat
 
-**Sistem Informasi Pelatihan** • Versi 1.9.0
+**Sistem Informasi Pelatihan** • Versi 2.0.0
 
-> **Sudah memasang versi sebelumnya (1.0 – 1.8)?** Langsung ke **Bagian G — Memperbarui Versi**. Data Anda tetap aman dan database diperbarui otomatis.
+> **Sudah memasang versi sebelumnya (1.0 – 1.9)?** Langsung ke **Bagian G — Memperbarui Versi**. Data Anda tetap aman dan database diperbarui otomatis.
+
+### Yang baru di versi 2.0 — Peringkat Satu & import nilai harian dari Excel
+- **Menu baru “Peringkat Satu”** (Admin & Gadik): menampilkan peserta **peringkat 1 di setiap kelas pelatihan**, dikelompokkan per angkatan, lengkap dengan NIL AKHIR, selisih dengan peringkat 2, grafik tiap aspek dibanding rata-rata kelas, serta peringkat 2 dan 3. Bisa dilihat **gabungan semua mata pelajaran** atau **per mata pelajaran**. Gadik hanya melihat kelas penugasannya. Lihat **Bagian N**.
+- **Evaluasi & alasan otomatis**: tombol *Evaluasi lengkap* menjelaskan mengapa peserta itu meraih peringkat 1 — selisih nilai akhir, aspek penentu (memperhitungkan bobot 30/20/50), posisi tiap aspek di kelas, konsistensi & tren nilai harian, kelengkapan butir, butir terkuat, peringkat per mata pelajaran — beserta **saran pembinaan** dan **kesimpulan**. Bisa diunduh sebagai **Laporan PDF** (satu kelas atau semua kelas).
+- **Import nilai harian dari Excel** (Gadik): menu *Input Nilai Harian* → **Import Excel**. Unduh lembar nilai (satu sheet per HARI, format PROLAT A1–C2, sel skor dibatasi 0–10, JUMLAH otomatis), isi di Excel, unggah kembali, periksa pratinjau, lalu simpan — boleh sekaligus dikirim ke rekap. Lihat **Bagian O**.
 
 ### Yang baru di versi 1.9 — simpan instan & aplikasi terbuka seketika
 - **Simpan tanpa menunggu.** Saat menekan *Simpan* (peserta, mata pelajaran/kelas/peleton, penugasan, akun Gadik, jadwal tanpa bentrok) dan *Selesai & Kirim ke Rekap*, formulir langsung tertutup dan data **langsung tampil** di tabel. Server menyimpan di latar: di bilah atas muncul penanda **Menyimpan… → Tersimpan ✓**, dan baris yang sedang disimpan bertanda *menyimpan…*. Bila server menolak (mis. NRP sudah dipakai di kelas lain), perubahan dibatalkan otomatis dan formulir **dibuka lagi berisi isian tadi** beserta alasannya.
@@ -303,7 +308,7 @@ Tunggu 1–2 menit; bila tampilan masih lama tekan **Ctrl + Shift + R**.
 
 ---
 
-## Bagian G — Memperbarui Versi (1.0 – 1.8 → 1.9)
+## Bagian G — Memperbarui Versi (1.0 – 1.9 → 2.0)
 
 Lakukan saat aplikasi sepi (mis. sore hari). Data lama **tidak dihapus**. Langkahnya sama dari versi mana pun.
 
@@ -312,6 +317,7 @@ Lakukan saat aplikasi sepi (mis. sore hari). Data lama **tidak dihapus**. Langka
 2. Berkas **Kode** → hapus seluruh isinya → tempel isi `Kode.gs` versi terbaru. Lakukan hal yang sama untuk **Migrasi** (`Migrasi.gs`). Tekan **Ctrl + S**.
 3. **Terapkan → Kelola deployment → ✏️ Edit → Versi: Versi baru → Terapkan.** (URL `/exec` tetap sama.)
 4. Database diperbarui **otomatis** pada permintaan pertama (mis. saat ada yang login). Pembaruan ini:
+   - (v2.0) tidak ada sheet/kolom baru,
    - (v1.9) tidak ada sheet/kolom baru; trigger *onChange* (penyegar cache saat baris ditambah/dihapus manual) dipasang otomatis,
    - (v1.8) tidak ada sheet/kolom baru — import Excel memakai sheet yang sudah ada,
    - (v1.7) tidak membuat sheet baru; sheet lama `Data_Pengasuh` & `Nilai_Mental` tidak dipakai lagi dan **tidak dihapus otomatis** (bersihkan dengan `hapusDataPengasuh` bila diinginkan — Bagian L),
@@ -326,12 +332,12 @@ Lakukan saat aplikasi sepi (mis. sore hari). Data lama **tidak dihapus**. Langka
 
 **2. Frontend**
 1. Simpan dulu nilai `GAS_URL` dari `js/config.js` lama Anda.
-2. Ekstrak `sipl-frontend.zip` versi 1.9, lalu **salin seluruh isinya menimpa** isi folder repository lama Anda (`index.html`, **`sw.js`**, `css`, `js`, `img`, dan berkas `.md`). Berkas `sw.js` wajib ikut di folder utama (sejajar `index.html`).
+2. Ekstrak `sipl-frontend.zip` versi 2.0, lalu **salin seluruh isinya menimpa** isi folder repository lama Anda (`index.html`, **`sw.js`**, `css`, `js`, `img`, dan berkas `.md`). Berkas `sw.js` wajib ikut di folder utama (sejajar `index.html`).
 3. Buka `js/config.js` yang baru → isi kembali `GAS_URL` yang tadi disimpan.
 4. Kirim ke GitHub:
    ```bash
    git add .
-   git commit -m "SIPL 1.9 - simpan instan, aplikasi terbuka seketika"
+   git commit -m "SIPL 2.0 - peringkat satu & import nilai Excel"
    git push
    ```
 5. Tunggu 1–2 menit. Berkas versi baru otomatis dimuat (tidak perlu hapus cache); bila tampilan masih lama, tekan **Ctrl + Shift + R**.
@@ -489,6 +495,36 @@ Ketentuan: format **JPEG/JPG** saja (PNG ditolak). Foto otomatis **dipotong ke r
 
 ---
 
+## Bagian N — Peringkat Satu & Evaluasi (v2.0)
+
+1. Buka menu **Penilaian → Peringkat Satu**. Setiap kelas tampil sebagai kartu: nama peserta peringkat 1, Pangkat/NRP, peleton, **NIL AKHIR**, selisih dengan peringkat 2, tiga bilah aspek (Perilaku, Teori, Praktek) dengan garis penanda rata-rata kelas, tiga alasan utama, serta peringkat 2 dan 3.
+2. **Dasar peringkat**: *Gabungan semua mapel* (sama dengan pilihan "Semua mata pelajaran" di Rekap Akhir) atau *Per mata pelajaran* (juara setiap mapel di tiap kelas).
+3. Tekan **Evaluasi lengkap** untuk membaca analisisnya:
+   | Bagian | Isi |
+   |---|---|
+   | Tabel aspek | nilai peserta, rata-rata kelas, nilai peringkat 2, dan urutannya di kelas per aspek |
+   | Alasan meraih peringkat 1 | selisih NIL AKHIR, aspek penentu keunggulan (memperhitungkan bobot), posisi di atas rata-rata, konsistensi & tren harian, kelengkapan butir, butir terkuat, peringkat per mapel |
+   | Evaluasi & saran pembinaan | aspek/butir yang perlu ditingkatkan, peringatan bila persaingan ketat atau tren menurun |
+   | Kesimpulan | ringkasan satu paragraf |
+4. **Unduh Laporan PDF** (A4, berkop) untuk semua kelas yang tampil, atau **Unduh PDF** di jendela evaluasi untuk satu kelas.
+
+Peringkat memakai rumus yang sama dengan Rekap Akhir dan hanya menghitung sesi yang sudah **dikirim ke rekap**. Bila dua peserta bernilai sama, urutan mengikuti aturan RANK pada format PROLAT dan hal itu disebutkan dalam evaluasi.
+
+## Bagian O — Import Nilai Harian dari Excel (v2.0)
+
+1. Login Gadik → **Input Nilai Harian** → tombol **Import Excel** (pojok kanan atas).
+2. Pilih **Mata pelajaran & kelas**. Status tiap hari tampil: *Belum tiba*, *Kosong*, *Draf • n*, atau *Masuk rekap*.
+3. **Unduh Template Nilai (Excel)** → berkas berisi satu sheet untuk setiap hari (HARI 1 … HARI 6) dengan kop, nama peserta urut abjad, kolom **A1 A2 A3 | B1 B2 | C1 C2**, kolom **JUMLAH** berumus, kolom tanda tangan, dan sheet **PETUNJUK**. Nilai yang sudah tersimpan ikut tercantum. Sel skor hanya menerima angka **0–10** (desimal boleh, mis. 7,5).
+4. Isi nilai di Excel. **Jangan mengubah** kolom NAMA, PANGKAT / NRP, judul kolom, dan baris **Kode impor** — dipakai untuk mencocokkan peserta dan tanggal.
+5. Unggah berkas. Pratinjau menampilkan tiap lembar: jumlah peserta terisi, yang lengkap 7 butir, yang berubah, dan statusnya (*Siap disimpan*, *Dilewati*, atau *Perbaiki* dengan nomor baris & alasannya).
+6. Bila ada yang perlu diperbaiki, betulkan di Excel lalu unggah ulang — **belum ada nilai yang disimpan** sebelum semua benar.
+7. Centang **Sekaligus kirim ke rekap** bila nilai sudah final (hari-hari itu langsung terkunci), atau biarkan kosong untuk menyimpan sebagai **draf** lalu kirim dari halaman Input Nilai Harian.
+8. Tekan **Simpan n Hari**.
+
+Aturan: baris yang dikosongkan **tidak menghapus** nilai lama; butir kosong pada baris yang terisi dihitung 0; lembar yang sudah masuk rekap (terkunci), tanggal yang belum tiba, dan lembar tanpa perubahan otomatis dilewati.
+
+---
+
 ## Pemeliharaan (fungsi yang bisa dijalankan dari editor Apps Script)
 
 | Fungsi | Kegunaan |
@@ -510,6 +546,8 @@ Cadangan otomatis tersimpan di folder **Cadangan Harian** (14 salinan terakhir).
 |---|---|---|
 | Login | password salah 5× | pesan umum, lalu akun terkunci 15 menit |
 | Hak akses | login Gadik, buka alamat `#/personel` | dialihkan ke Dashboard |
+| Peringkat Satu | buka menu Peringkat Satu → Evaluasi lengkap → Unduh PDF | peringkat 1 sama dengan Rekap Akhir; alasan, saran & kesimpulan tampil dan tercetak di PDF |
+| Import nilai | Input Nilai Harian → Import Excel → unduh template, isi skor, unggah | pratinjau per hari; skor di luar 0–10 ditandai; setelah simpan nilai tampil di Input Nilai Harian |
 | Import | Personel → Tambah Gadik → Import Excel → unggah template yang diisi | pratinjau urut abjad & KAPITAL; baris salah ditandai; setelah simpan Gadik tampil di daftar |
 | Ekspor | Peserta Pelatihan → Ekspor Excel | berkas .xlsx urut abjad, HURUF KAPITAL, NRP tetap 0 di depan |
 | Login | masukkan username & password benar → **Masuk** | layar login buram, logo + persen 0–100 % tampil, lalu dashboard terbuka |

@@ -35,7 +35,7 @@ function openModal(o) {
   const ov = document.createElement('div');
   ov.className = 'overlay' + (o.drawer ? ' drawer-ov' : '');
   ov.innerHTML =
-    '<div class="' + (o.drawer ? 'drawer' : 'modal ' + (o.size || '')) + '" role="dialog" aria-modal="true" aria-labelledby="mdl-t">' +
+    '<div class="' + (o.drawer ? 'drawer ' + (o.size || '') : 'modal ' + (o.size || '')) + '" role="dialog" aria-modal="true" aria-labelledby="mdl-t">' +
       '<div class="modal-head">' + (o.icon ? '<div class="icon-tile">' + icon(o.icon) + '</div>' : '') +
         '<div><h2 id="mdl-t">' + esc(o.title || '') + '</h2>' + (o.sub ? '<div class="sub">' + esc(o.sub) + '</div>' : '') + '</div>' +
         '<button class="btn icon" data-close aria-label="Tutup">' + icon('x') + '</button></div>' +

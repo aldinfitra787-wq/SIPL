@@ -3,7 +3,7 @@
    - berkas ber-versi (?v=…)     : cache dulu → tanpa unduh ulang.
    - gambar                      : cache lalu diperbarui di latar.
    - permintaan ke server Apps Script (lain domain) TIDAK disentuh. */
-const VERSI = '1.9.0';
+const VERSI = '2.0.0';
 const CACHE = 'sipl-' + VERSI;
 const INTI = ['./', 'index.html', 'js/config.js?v=' + VERSI,
   'css/style.css?v=' + VERSI, 'js/icons.js?v=' + VERSI, 'js/core.js?v=' + VERSI, 'js/ui.js?v=' + VERSI,

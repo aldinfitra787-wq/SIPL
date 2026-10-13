@@ -5,12 +5,12 @@
 const NAV = {
   Admin: [
     ['Navigasi Utama', [['dashboard', 'grid', 'Dashboard'], ['peserta', 'cap', 'Peserta Pelatihan'], ['personel', 'id-card', 'Personel & Akun', 'ADMIN'], ['master', 'database', 'Master Data', 'ADMIN'], ['jadwal', 'calendar', 'Jadwal Pelajaran']]],
-    ['Penilaian', [['rekap', 'table', 'Rekap Harian'], ['rekap-akhir', 'medal', 'Rekap Akhir']]],
+    ['Penilaian', [['rekap', 'table', 'Rekap Harian'], ['rekap-akhir', 'medal', 'Rekap Akhir'], ['juara', 'shield-star', 'Peringkat Satu']]],
     ['Sistem', [['migrasi', 'import', 'Migrasi Data'], ['pengaturan', 'settings', 'Pengaturan']]]
   ],
   Gadik: [
     ['Navigasi Utama', [['dashboard', 'grid', 'Dashboard'], ['peserta', 'cap', 'Peserta Pelatihan'], ['jadwal', 'calendar', 'Jadwal Pelajaran']]],
-    ['Penilaian', [['nilai', 'pen', 'Input Nilai Harian'], ['rekap-akhir', 'medal', 'Rekap Akhir']]],
+    ['Penilaian', [['nilai', 'pen', 'Input Nilai Harian'], ['rekap-akhir', 'medal', 'Rekap Akhir'], ['juara', 'shield-star', 'Peringkat Satu']]],
     ['Akun', [['pengaturan', 'settings', 'Pengaturan']]]
   ]
 };
@@ -215,7 +215,7 @@ function buildNav() {
   ).join('');
 }
 function setActiveNav(name) {
-  const alias = { akun: 'personel', 'impor-gadik': 'personel', 'impor-peserta': 'peserta' };
+  const alias = { akun: 'personel', 'impor-gadik': 'personel', 'impor-peserta': 'peserta', 'impor-nilai': 'nilai' };
   const n = alias[name] || name;
   $$('#nav a').forEach(a => { const on = a.dataset.nav === n; a.classList.toggle('active', on); if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
   $('#shell').classList.remove('nav-open');

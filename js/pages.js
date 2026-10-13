@@ -944,7 +944,8 @@ const NilaiPage = (() => {
         eyebrow: 'Penilaian Harian // Tenaga Pendidik',
         title: 'Input Nilai Harian',
         desc: 'Pilih <b>tanggal</b> dan <b>sesi</b> yang Anda ajar, isi skor <b>A1–C2 (0–10)</b> seluruh peserta sesuai format penilaian PROLAT, lalu tekan <b>Selesai &amp; Kirim ke Rekap</b>. Nilai tersimpan otomatis sebagai draf — <span class="kbd">Enter</span> pindah ke butir berikutnya, <span class="kbd">↑</span><span class="kbd">↓</span> pindah peserta.',
-        chips: '<span class="chip ink">' + icon('lock', 'sm') + 'Hanya sesi yang Anda ajar</span>'
+        chips: '<span class="chip ink">' + icon('lock', 'sm') + 'Hanya sesi yang Anda ajar</span>',
+        actions: '<button type="button" class="btn outline" id="nh-imp">' + icon('file-sheet') + 'Import Excel</button>'
       }) +
       '<div class="card"><div class="card-head">' +
         '<div class="step-no">1</div><div class="grow"><h3>Tanggal &amp; sesi</h3><div class="sub" id="nh-hari"></div></div>' +
@@ -956,6 +957,7 @@ const NilaiPage = (() => {
       '<div id="nh-draf"></div>' +
       '<div id="nh-work"></div>';
 
+    $('#nh-imp', el).onclick = () => { flushCurrent(); go('impor-nilai/' + encodeURIComponent(st.jid || '') + '/' + st.tgl); };
     $('#nh-date', el).addEventListener('change', e => { if (e.target.value) selectDate(e.target.value); else e.target.value = st.tgl; });
     $('#nh-prev', el).onclick = () => selectDate(addDays(st.tgl, -1));
     $('#nh-next', el).onclick = () => selectDate(addDays(st.tgl, 1));
@@ -2178,3 +2180,531 @@ function ImportPage(jenis) {
 }
 page('impor-gadik', ImportPage('gadik'));
 page('impor-peserta', ImportPage('peserta'));
+
+// ==========================================================================
+// PERINGKAT SATU (v2.0) — peserta peringkat 1 setiap pelatihan/kelas + evaluasi alasannya
+// Dihitung dari rumus Rekap Akhir yang sama (NIL AKHIR & RANK), lalu dianalisis:
+// selisih dengan peringkat 2, penyumbang selisih per aspek (memperhitungkan bobot),
+// posisi tiap aspek di kelas, konsistensi & tren nilai harian, kelengkapan, dan per mata pelajaran.
+// ==========================================================================
+function stdev(arr) { const a = arr.filter(v => v != null && isFinite(v)); if (a.length < 2) return 0; const m = a.reduce((s, v) => s + v, 0) / a.length; return Math.sqrt(a.reduce((s, v) => s + (v - m) * (v - m), 0) / (a.length - 1)); }
+const n2 = v => fmt.num(v, 2);
+const plus = v => (v >= 0 ? '+' : '−') + fmt.num(Math.abs(v), 2);
+
+/** d = data rekap kelas; peserta = peserta kelas; mapel = '' (gabungan) atau ID mapel. */
+function evaluasiJuara(d, peserta, mapel) {
+  const A = PENILAIAN.ASPEK;
+  const sesi = (d && d.sesi || []).filter(s => !mapel || s.ID_Mapel === mapel);
+  const hasil = rekapAkhir(Object.assign({}, d, { sesi }), peserta);
+  const rows = hasil.rows.filter(r => r.na != null);
+  if (!hasil.n || !rows.length) return { kosong: true, hasil };
+  const urut = rows.slice().sort((a, b) => a.rank - b.rank);
+  const r1 = urut[0], r2 = urut[1] || null, r3 = urut[2] || null;
+  const rata = A.map((g, gi) => avg(rows.map(r => r.asp[gi])));
+  const rataNA = avg(rows.map(r => r.na));
+  const posisi = A.map((g, gi) => 1 + rows.filter(r => r.asp[gi] > r1.asp[gi] + 1e-9).length);
+  const nP = rows.length, nH = hasil.n;
+  const alasan = [], catatan = [];
+  const nama2 = r2 ? r2.Nama : '';
+
+  // 1) nilai akhir & selisih
+  const margin = r2 ? r1.na - r2.na : null, seri = r2 && Math.abs(margin) < 1e-6;
+  if (!r2) alasan.push('NIL AKHIR ' + n2(r1.na) + ' — satu-satunya peserta yang memiliki nilai di kelas ini.');
+  else if (seri) alasan.push('NIL AKHIR ' + n2(r1.na) + ' sama persis dengan ' + nama2 + '. Sesuai rumus RANK pada format PROLAT, peserta dengan nilai sama diurutkan menurut urutan daftar, sehingga ' + r1.Nama + ' tercatat di peringkat 1.');
+  else alasan.push('NIL AKHIR ' + n2(r1.na) + ' adalah yang tertinggi dari ' + nP + ' peserta — unggul ' + n2(margin) + ' poin dari peringkat 2 (' + nama2 + ', ' + n2(r2.na) + ') dan ' + plus(r1.na - rataNA) + ' poin di atas rata-rata kelas (' + n2(rataNA) + ').');
+
+  // 2) penyumbang selisih (bobot)
+  if (r2 && !seri) {
+    const kon = A.map((g, gi) => ({ g, gi, v: (r1.asp[gi] - r2.asp[gi]) * g.bobot })).sort((a, b) => b.v - a.v);
+    const utama = kon[0];
+    if (utama.v > 0) {
+      const pct = Math.round(utama.v / kon.filter(k => k.v > 0).reduce((s, k) => s + k.v, 0) * 100);
+      alasan.push('Penentu utama keunggulan: ' + utama.g.nama + ' (bobot ' + Math.round(utama.g.bobot * 100) + '%) — ' + n2(r1.asp[utama.gi]) + ' dibanding ' + n2(r2.asp[utama.gi]) + ' milik peringkat 2, menyumbang ' + pct + '% dari keunggulan nilai akhir.');
+    }
+    const kalah = kon.filter(k => k.v < 0);
+    if (kalah.length) alasan.push('Walau ' + kalah.map(k => k.g.nama.replace('Aspek ', '')).join(' & ') + ' sedikit di bawah peringkat 2 (' + kalah.map(k => n2(r1.asp[k.gi]) + ' vs ' + n2(r2.asp[k.gi])).join('; ') + '), selisih itu tertutup oleh keunggulan pada aspek berbobot lebih besar.');
+  }
+
+  // 3) posisi tiap aspek di kelas
+  const diAtas = A.filter((g, gi) => r1.asp[gi] > rata[gi] + 1e-9);
+  const juaraAspek = A.filter((g, gi) => posisi[gi] === 1);
+  alasan.push((diAtas.length === A.length ? 'Di atas rata-rata kelas pada SEMUA aspek: ' : 'Di atas rata-rata kelas pada ' + diAtas.length + ' dari ' + A.length + ' aspek: ') +
+    A.map((g, gi) => g.nama.replace('Aspek ', '') + ' ' + n2(r1.asp[gi]) + ' (' + plus(r1.asp[gi] - rata[gi]) + ', urutan ' + posisi[gi] + ' di kelas)').join('; ') + '.' +
+    (juaraAspek.length ? ' Tertinggi di kelas untuk ' + juaraAspek.map(g => g.nama.replace('Aspek ', '')).join(', ') + '.' : ''));
+
+  // 4) konsistensi harian
+  const harian = r1.per.map(x => x.nh);
+  const terbaik = hasil.units.filter((u, ui) => r1.per[ui].nh >= Math.max.apply(null, rows.map(r => r.per[ui].nh)) - 1e-9).length;
+  const sd = stdev(harian), sdK = avg(rows.map(r => stdev(r.per.map(x => x.nh)))) || 0;
+  if (nH > 1) {
+    alasan.push('Konsisten selama ' + nH + ' hari penilaian: nilai harian ' + n2(Math.min.apply(null, harian)) + '–' + n2(Math.max.apply(null, harian)) +
+      (terbaik ? ', menjadi nilai harian tertinggi di kelas pada ' + terbaik + ' dari ' + nH + ' hari' : '') +
+      (sd <= sdK ? ', dengan naik-turun nilai (simpangan ' + n2(sd) + ') lebih stabil daripada rata-rata kelas (' + n2(sdK) + ').' : '.'));
+  } else alasan.push('Dinilai pada 1 hari penilaian dengan nilai harian ' + n2(harian[0]) + (terbaik ? ' — tertinggi di kelas pada hari itu.' : '.'));
+  if (nH >= 4) {
+    const h = Math.floor(nH / 2), a1 = avg(harian.slice(0, h)), a2 = avg(harian.slice(nH - h));
+    if (a2 - a1 >= 0.5) alasan.push('Tren meningkat: rata-rata nilai harian naik dari ' + n2(a1) + ' (paruh awal) menjadi ' + n2(a2) + ' (paruh akhir).');
+    else if (a1 - a2 >= 0.5) catatan.push('Nilai harian cenderung menurun dari ' + n2(a1) + ' (paruh awal) ke ' + n2(a2) + ' (paruh akhir) — perlu dijaga agar peringkat tidak tersusul.');
+  }
+
+  // 5) kelengkapan
+  const lengkap = r1.per.filter(x => terisi(x.v) === BUTIR.length).length;
+  if (lengkap === nH) alasan.push('Seluruh ' + BUTIR.length + ' butir penilaian (' + BUTIR.join(', ') + ') terisi lengkap di setiap hari — tidak ada butir bernilai kosong (0).');
+  else catatan.push((nH - lengkap) + ' hari penilaian memiliki butir yang kosong (dihitung 0). Pastikan Gadik mengisi semua butir agar nilai mencerminkan kemampuan sebenarnya.');
+
+  // 6) butir terkuat & terlemah
+  const bAvg = BUTIR.map((b, bi) => avg(r1.per.map(x => Number(x.v[bi]) || 0)) || 0);
+  const kAvg = BUTIR.map((b, bi) => avg([].concat.apply([], rows.map(r => r.per.map(x => Number(x.v[bi]) || 0)))) || 0);
+  const aspekOf = b => (A.find(g => g.butir.indexOf(b) > -1) || {}).nama || '';
+  const iKuat = bAvg.reduce((m, v, i) => (v - kAvg[i] > bAvg[m] - kAvg[m] ? i : m), 0);
+  const iLemah = bAvg.reduce((m, v, i) => (v < bAvg[m] ? i : m), 0);
+  alasan.push('Butir paling menonjol: ' + BUTIR[iKuat] + ' (' + aspekOf(BUTIR[iKuat]) + ') rata-rata ' + n2(bAvg[iKuat]) + ' dari ' + PENILAIAN.SKOR_MAX + ', ' + plus(bAvg[iKuat] - kAvg[iKuat]) + ' di atas rata-rata kelas.');
+
+  // 7) per mata pelajaran (bila gabungan)
+  let perMapel = [];
+  if (!mapel) {
+    const ids = Array.from(new Set(sesi.filter(s => s.Status === 'Selesai').map(s => s.ID_Mapel)));
+    perMapel = ids.map(m => { const h = rekapAkhir(Object.assign({}, d, { sesi: sesi.filter(s => s.ID_Mapel === m) }), peserta); const r = h.rows.find(x => x.ID_Peserta === r1.ID_Peserta); return { m, rank: r ? r.rank : null, na: r ? r.na : null, n: h.rows.filter(x => x.na != null).length }; }).filter(x => x.rank != null);
+    if (perMapel.length > 1) {
+      const satu = perMapel.filter(x => x.rank === 1), terendah = perMapel.slice().sort((a, b) => b.rank - a.rank)[0];
+      alasan.push('Per mata pelajaran: peringkat 1 pada ' + satu.length + ' dari ' + perMapel.length + ' mapel' + (satu.length ? ' (' + satu.map(x => mapelName(x.m)).join(', ') + ')' : '') +
+        (terendah.rank > 1 ? '; posisi terendah peringkat ' + terendah.rank + ' pada ' + mapelName(terendah.m) + '.' : ' — unggul di semua mapel.'));
+      if (terendah.rank > 3) catatan.push('Peringkatnya pada ' + mapelName(terendah.m) + ' masih ' + terendah.rank + ' dari ' + terendah.n + ' — mapel ini perlu pendampingan agar prestasi merata.');
+    }
+  }
+
+  // Evaluasi & saran
+  const iA = A.reduce((m, g, gi) => (r1.asp[gi] - rata[gi] < r1.asp[m] - rata[m] ? gi : m), 0);
+  catatan.unshift('Aspek yang paling perlu dipertahankan/ditingkatkan: ' + A[iA].nama + ' (' + n2(r1.asp[iA]) + ', ' + plus(r1.asp[iA] - rata[iA]) + ' terhadap rata-rata kelas). Butir terendah: ' + BUTIR[iLemah] + ' (' + aspekOf(BUTIR[iLemah]) + ') rata-rata ' + n2(bAvg[iLemah]) + '.');
+  if (r2 && !seri && margin < 1) catatan.push('Persaingan sangat ketat: selisih dengan peringkat 2 hanya ' + n2(margin) + ' poin, sehingga satu hari penilaian dapat mengubah urutan.');
+  else if (r2 && !seri && margin >= 5) catatan.push('Keunggulan cukup jauh (' + n2(margin) + ' poin) — layak dijadikan teladan dan pendamping belajar bagi rekan satu kelas.');
+
+  const tingkat = r1.na >= 85 ? 'sangat baik' : r1.na >= 75 ? 'baik' : r1.na >= 65 ? 'cukup' : 'perlu peningkatan';
+  const utamaNama = r2 && !seri ? A.map((g, gi) => ({ g, v: (r1.asp[gi] - r2.asp[gi]) * g.bobot })).sort((a, b) => b.v - a.v)[0].g.nama : A[posisi.indexOf(Math.min.apply(null, posisi))].nama;
+  const kesimpulan = r1.Nama + ' meraih peringkat 1 ' + (mapel ? 'mata pelajaran ' + mapelName(mapel) : 'secara keseluruhan') + ' dengan NIL AKHIR ' + n2(r1.na) + ' (kategori ' + tingkat + '). ' +
+    'Keunggulan terutama berasal dari ' + utamaNama + (nH > 1 ? ' yang dijaga konsisten selama ' + nH + ' hari penilaian' : '') + '. ' +
+    'Evaluasi: pertahankan kekuatan pada ' + BUTIR[iKuat] + ', dan tingkatkan ' + BUTIR[iLemah] + ' agar prestasi semakin merata di semua aspek.';
+
+  const tabel = A.map((g, gi) => [g.nama, Math.round(g.bobot * 100) + '%', n2(r1.asp[gi]), n2(rata[gi]), r2 ? n2(r2.asp[gi]) : '—', posisi[gi] + ' / ' + nP]);
+  tabel.push(['NIL AKHIR', '100%', n2(r1.na), n2(rataNA), r2 ? n2(r2.na) : '—', '1 / ' + nP]);
+  return { kosong: false, hasil, r1, r2, r3, rata, rataNA, margin, seri, posisi, nP, nH, alasan, catatan, kesimpulan, tabel, perMapel };
+}
+
+const JuaraPage = (() => {
+  const st = { angkatan: '', mode: 'gabungan' };
+  let el, err = null;
+  const kelasku = () => kelasList();
+  const dataK = k => (S.data.rekap || {})[k];
+
+  function load(force) {
+    err = null;
+    S.data.rekap = S.data.rekap || {};
+    swr('juara', 'rekapBanyak', {}, d => {
+      Object.keys(d.rekap || {}).forEach(k => { S.data.rekap[k] = d.rekap[k]; });
+      if (el && !el.hidden && !_modals.length) fill();
+    }, { fresh: force ? 0 : 15000, force, valid: d => !!d && typeof d.rekap === 'object', onError: res => { err = res.message; fill(); } });
+  }
+
+  function build(root) {
+    el = root;
+    const ang = Array.from(new Set(kelasku().map(k => k.Nama_Angkatan))).sort(collator.compare);
+    el.innerHTML = pageHead({
+      eyebrow: 'Prestasi Peserta // Peringkat Satu Tiap Pelatihan',
+      title: 'Peringkat Satu',
+      desc: 'Peserta dengan <b>NIL AKHIR tertinggi</b> di setiap kelas pelatihan — lengkap dengan <b>evaluasi dan alasan</b> mengapa ia meraih peringkat 1. Dihitung dari penilaian harian yang sudah dikirim ke rekap (' + esc(rumusAkhir()) + ').',
+      actions: '<button class="btn outline" id="jr-refresh">' + icon('refresh') + 'Segarkan</button><button class="btn primary" id="jr-pdf">' + icon('download') + 'Unduh Laporan PDF</button>'
+    }) +
+      '<div class="card"><div class="toolbar">' +
+        (ang.length > 1 ? '<div class="field"><label for="jr-ang">Pelatihan / angkatan</label><select id="jr-ang" class="select">' + '<option value="">Semua pelatihan</option>' + ang.map(a => '<option' + (a === st.angkatan ? ' selected' : '') + '>' + esc(a) + '</option>').join('') + '</select></div>' : '') +
+        '<div class="field jr-modebar"><label>Dasar peringkat</label><div class="seg" id="jr-mode"><button type="button" data-mode="gabungan">Gabungan semua mapel</button><button type="button" data-mode="mapel">Per mata pelajaran</button></div></div>' +
+        '<p class="small muted grow" style="align-self:center;margin:0">' + icon('info', 'sm') + ' Sesi yang masih draf belum dihitung.</p>' +
+      '</div></div>' +
+      '<div id="jr-list" class="jr-list mt-24"></div>';
+    $('#jr-refresh', el).onclick = () => load(true);
+    $('#jr-pdf', el).onclick = e => unduhPdf(e.currentTarget);
+    const sa = $('#jr-ang', el); if (sa) sa.onchange = e => { st.angkatan = e.target.value; fill(); };
+    $('#jr-mode', el).onclick = e => { const b = e.target.closest('[data-mode]'); if (b) { st.mode = b.dataset.mode; fill(); } };
+    $('#jr-list', el).addEventListener('click', e => {
+      const b = e.target.closest('[data-eval]');
+      if (b) { const [k, m] = b.dataset.eval.split('|'); return lihat(k, m || ''); }
+      if (e.target.closest('[data-retry]')) load(true);
+    });
+  }
+
+  function daftarKelas() { return kelasku().filter(k => !st.angkatan || k.Nama_Angkatan === st.angkatan); }
+  function pesertaK(k) { return S.boot.peserta.filter(p => p.ID_Kelas === k); }
+
+  function fill() {
+    if (!el) return;
+    $$('#jr-mode [data-mode]', el).forEach(b => b.classList.toggle('on', b.dataset.mode === st.mode));
+    const list = daftarKelas(), host = $('#jr-list', el);
+    if (!list.length) { host.innerHTML = emptyState('building', 'Belum ada kelas', S.role === 'Admin' ? 'Tambahkan angkatan & kelas di Master Data.' : 'Akun Anda belum ditugaskan ke kelas.'); return; }
+    if (!list.some(k => dataK(k.ID_Kelas))) { host.innerHTML = err ? errorState(err) : '<div class="grid c2">' + list.map(() => '<div class="card pad">' + skeletonRows(4, 2) + '</div>').join('') + '</div>'; return; }
+    const groups = {};
+    list.forEach(k => { (groups[k.Nama_Angkatan] = groups[k.Nama_Angkatan] || []).push(k); });
+    host.innerHTML = Object.keys(groups).sort(collator.compare).map(a =>
+      '<div class="section-title"><h2>' + esc(a) + '</h2><span class="label-mono">' + groups[a].length + ' kelas</span></div>' +
+      '<div class="grid c2 jr-grid">' + groups[a].sort((x, y) => collator.compare(x.Nama_Kelas, y.Nama_Kelas)).map(k => st.mode === 'mapel' ? kartuMapel(k) : kartu(k)).join('') + '</div>').join('');
+    hydrateIcons(host);
+  }
+
+  function inisial(n) { return esc(initials(n)); }
+  function kartu(k) {
+    const d = dataK(k.ID_Kelas);
+    const head = '<div class="jr-head"><div class="grow"><span class="label-mono">' + esc(k.Nama_Angkatan) + '</span><h3>' + esc(k.Nama_Kelas) + '</h3></div>';
+    if (!d) return '<div class="card jr-card">' + head + '</div><div class="card-body">' + skeletonRows(3, 2) + '</div></div>';
+    const ev = evaluasiJuara(d, pesertaK(k.ID_Kelas), '');
+    if (ev.kosong) return '<div class="card jr-card">' + head + '<span class="chip line">' + pesertaCount(k.ID_Kelas) + ' peserta</span></div><div class="card-body">' + emptyState('medal', 'Belum ada peringkat', 'Peringkat muncul setelah Gadik mengirim penilaian harian kelas ini ke rekap.') + '</div></div>';
+    const r = ev.r1, A = PENILAIAN.ASPEK;
+    return '<div class="card jr-card">' + head + '<span class="chip line">' + ev.nH + ' hari • ' + ev.nP + ' peserta</span></div>' +
+      '<div class="jr-hero"><div class="jr-medal"><span>' + inisial(r.Nama) + '</span><b>1</b></div>' +
+        '<div class="grow"><div class="eyebrow plain">Peringkat 1' + (ev.seri ? ' (nilai sama)' : '') + '</div><div class="jr-name">' + esc(r.Nama) + '</div><div class="small muted">' + esc(pangkatNrp(r.p)) + ' • ' + esc(pelName(r.p.ID_Peleton)) + '</div></div>' +
+        '<div class="jr-na"><span class="label-mono">Nil Akhir</span><b>' + n2(r.na) + '</b>' + (ev.r2 && !ev.seri ? '<small>+' + n2(ev.margin) + ' dari peringkat 2</small>' : '') + '</div></div>' +
+      '<div class="jr-bars">' + A.map((g, gi) => '<div class="jr-bar"><div class="row between small"><span><b>' + esc(g.nama.replace('Aspek ', '')) + '</b> <span class="faint">' + Math.round(g.bobot * 100) + '%</span></span><span class="mono">' + n2(r.asp[gi]) + ' <span class="faint">• rata-rata ' + n2(ev.rata[gi]) + '</span></span></div>' +
+        '<div class="jr-track"><span style="width:' + Math.max(0, Math.min(100, r.asp[gi])) + '%"></span><i style="left:' + Math.max(0, Math.min(100, ev.rata[gi])) + '%" title="Rata-rata kelas"></i></div></div>').join('') + '</div>' +
+      '<div class="jr-why"><div class="label-mono">Mengapa peringkat 1?</div><ul>' + ev.alasan.slice(0, 3).map(t => '<li>' + esc(t) + '</li>').join('') + '</ul></div>' +
+      '<div class="jr-foot">' + [ev.r2, ev.r3].filter(Boolean).map((x, i) => '<span class="jr-pod"><b>' + (i + 2) + '</b>' + esc(x.Nama) + ' <span class="mono">' + n2(x.na) + '</span></span>').join('') +
+        '<button type="button" class="btn primary sm" data-eval="' + esc(k.ID_Kelas) + '|">' + icon('clipboard-check', 'sm') + 'Evaluasi lengkap</button></div></div>';
+  }
+
+  function kartuMapel(k) {
+    const d = dataK(k.ID_Kelas);
+    const head = '<div class="jr-head"><div class="grow"><span class="label-mono">' + esc(k.Nama_Angkatan) + '</span><h3>' + esc(k.Nama_Kelas) + '</h3></div></div>';
+    if (!d) return '<div class="card jr-card">' + head + '<div class="card-body">' + skeletonRows(3, 2) + '</div></div>';
+    const ids = Array.from(new Set(d.sesi.filter(s => s.Status === 'Selesai').map(s => s.ID_Mapel)));
+    const items = ids.map(m => ({ m, ev: evaluasiJuara(d, pesertaK(k.ID_Kelas), m) })).filter(x => !x.ev.kosong).sort((a, b) => collator.compare(mapelName(a.m), mapelName(b.m)));
+    if (!items.length) return '<div class="card jr-card">' + head + '<div class="card-body">' + emptyState('medal', 'Belum ada peringkat', 'Belum ada penilaian yang dikirim ke rekap.') + '</div></div>';
+    return '<div class="card jr-card">' + head + '<ul class="jr-mapel">' + items.map(x => '<li><div class="grow"><span class="label-mono">' + esc(mapelName(x.m)) + ' • ' + x.ev.nH + ' hari</span><b>' + esc(x.ev.r1.Nama) + '</b><small class="muted">' + esc(pangkatNrp(x.ev.r1.p)) + '</small></div>' +
+      '<div class="jr-na sm"><b>' + n2(x.ev.r1.na) + '</b>' + (x.ev.r2 && !x.ev.seri ? '<small>+' + n2(x.ev.margin) + '</small>' : '') + '</div>' +
+      '<button type="button" class="btn outline xs" data-eval="' + esc(k.ID_Kelas) + '|' + esc(x.m) + '">Evaluasi</button></li>').join('') + '</ul></div>';
+  }
+
+  function lihat(k, m) {
+    const d = dataK(k), kl = R().kelas[k];
+    if (!d || !kl) return;
+    const ev = evaluasiJuara(d, pesertaK(k), m);
+    if (ev.kosong) return;
+    const r = ev.r1;
+    openModal({
+      drawer: true, size: 'jr-drawer', icon: 'shield-star', title: 'Evaluasi Peringkat 1', sub: kl.Nama_Kelas + ' — ' + kl.Nama_Angkatan + ' • ' + (m ? mapelName(m) : 'Gabungan semua mata pelajaran'),
+      body: '<div class="jr-hero in"><div class="jr-medal"><span>' + inisial(r.Nama) + '</span><b>1</b></div><div class="grow"><div class="jr-name">' + esc(r.Nama) + '</div><div class="small muted">' + esc(pangkatNrp(r.p)) + ' • ' + esc(pelName(r.p.ID_Peleton)) + '</div></div>' +
+          '<div class="jr-na"><span class="label-mono">Nil Akhir</span><b>' + n2(r.na) + '</b></div></div>' +
+        '<div class="table-wrap"><table class="dt"><thead><tr><th>Aspek</th><th class="num">Bobot</th><th class="num">Nilai</th><th class="num">Rata-rata kelas</th><th class="num">Peringkat 2</th><th class="num">Urutan</th></tr></thead><tbody>' +
+          ev.tabel.map((t, i) => '<tr' + (i === ev.tabel.length - 1 ? ' class="jr-total"' : '') + '>' + t.map((c, ci) => '<td' + (ci ? ' class="num mono"' : '') + '>' + (ci === 2 || i === ev.tabel.length - 1 ? '<b>' + esc(c) + '</b>' : esc(c)) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>' +
+        '<div class="jr-sec"><h4>' + icon('medal', 'sm') + 'Alasan meraih peringkat 1</h4><ol>' + ev.alasan.map(t => '<li>' + esc(t) + '</li>').join('') + '</ol></div>' +
+        '<div class="jr-sec"><h4>' + icon('clipboard-check', 'sm') + 'Evaluasi & saran pembinaan</h4><ul>' + ev.catatan.map(t => '<li>' + esc(t) + '</li>').join('') + '</ul></div>' +
+        '<div class="jr-sec jr-kes"><h4>Kesimpulan</h4><p>' + esc(ev.kesimpulan) + '</p></div>' +
+        (ev.perMapel.length > 1 ? '<div class="jr-sec"><h4>Peringkat per mata pelajaran</h4><div class="table-wrap"><table class="dt"><thead><tr><th>Mata pelajaran</th><th class="num">Nil Akhir</th><th class="num">Peringkat</th></tr></thead><tbody>' +
+          ev.perMapel.map(x => '<tr><td>' + esc(mapelName(x.m)) + '</td><td class="num mono">' + n2(x.na) + '</td><td class="num"><span class="rank' + (x.rank <= 3 ? ' top' : '') + '">' + x.rank + '</span> <span class="faint small">/ ' + x.n + '</span></td></tr>').join('') + '</tbody></table></div></div>' : '') +
+        '<p class="small muted">' + icon('info', 'sm') + ' Analisis otomatis dari nilai yang sudah masuk rekap. Rincian nilai per hari ada di menu <a href="#/rekap-akhir/' + encodeURIComponent(k) + '">Rekap Akhir</a>.</p>',
+      foot: '<button class="btn outline" data-close>Tutup</button><button class="btn primary" id="jr-pdf1">' + icon('download') + 'Unduh PDF</button>',
+      onOpen: h => { h.$('#jr-pdf1').onclick = e => unduhPdf(e.currentTarget, [k], m); }
+    });
+  }
+
+  function unduhPdf(btn, only, m) {
+    const list = (only ? only.map(k => R().kelas[k]).filter(Boolean) : daftarKelas());
+    if (!list.some(k => dataK(k.ID_Kelas))) return toast('Data belum dimuat', 'Tunggu sebentar lalu coba lagi.', 'warning');
+    const kelas = [];
+    list.forEach(k => {
+      const d = dataK(k.ID_Kelas);
+      if (!d) return;
+      const mapels = st.mode === 'mapel' && !only ? Array.from(new Set(d.sesi.filter(s => s.Status === 'Selesai').map(s => s.ID_Mapel))) : [m || ''];
+      mapels.forEach(mp => {
+        const ev = evaluasiJuara(d, pesertaK(k.ID_Kelas), mp);
+        const judul = (k.Nama_Kelas + ' — ' + k.Nama_Angkatan + (mp ? ' • ' + mapelName(mp) : '')).toUpperCase();
+        if (ev.kosong) { kelas.push({ judul, kosong: 'Belum ada penilaian harian yang dikirim ke rekap untuk kelas ini.' }); return; }
+        kelas.push({
+          judul, nama: ev.r1.Nama, pn: pangkatNrp(ev.r1.p) + ' • ' + pelName(ev.r1.p.ID_Peleton), na: n2(ev.r1.na),
+          sub: ev.nH + ' hari penilaian • ' + ev.nP + ' peserta dinilai' + (ev.r2 ? ' • Peringkat 2: ' + ev.r2.Nama + ' (' + n2(ev.r2.na) + ')' : '') + (ev.r3 ? ' • Peringkat 3: ' + ev.r3.Nama + ' (' + n2(ev.r3.na) + ')' : ''),
+          tabel: { widths: [150, 46, 60, 74, 70, 56], head: ['ASPEK', 'BOBOT', 'NILAI', 'RATA-RATA KELAS', 'PERINGKAT 2', 'URUTAN'], body: ev.tabel, align: ['l', 'c', 'c', 'c', 'c', 'c'] },
+          alasan: ev.alasan, catatan: ev.catatan, kesimpulan: ev.kesimpulan
+        });
+      });
+    });
+    const data = {
+      judul: 'LAPORAN PESERTA PERINGKAT 1', instansi: String(CFG.INSTANSI || 'SPN Polda Papua Barat').toUpperCase(), ringkas: 'Peringkat 1',
+      info: [['Dasar peringkat', only ? (m ? 'Mata pelajaran ' + mapelName(m) : 'Gabungan semua mata pelajaran') : st.mode === 'mapel' ? 'Per mata pelajaran' : 'Gabungan semua mata pelajaran'],
+        ['Pelatihan', st.angkatan || (only ? R().kelas[only[0]].Nama_Angkatan : 'Semua pelatihan')], ['Rumus', 'NIL AKHIR = ' + rumusAkhir()], ['Dicetak', tglPanjang(todayStr(), true)]],
+      kelas
+    };
+    unduhBerkas('juaraPdf', data, namaBerkas(['Peringkat-1', only ? R().kelas[only[0]].Nama_Kelas : st.angkatan || 'Semua-Pelatihan', todayStr()], 'pdf'), btn);
+  }
+
+  return {
+    title: 'Peringkat Satu', roles: ['Admin', 'Gadik'],
+    show(root, p, o) { if (o.isNew || !el) build(root); fill(); load(false); },
+    onBoot() { if (el && !_modals.length) fill(); }
+  };
+})();
+page('juara', JuaraPage);
+
+// ==========================================================================
+// IMPORT NILAI HARIAN DARI EXCEL (v2.0) — Gadik
+// Template = lembar harian resmi (satu sheet per HARI) yang sudah berisi nilai tersimpan,
+// diisi di Excel lalu diunggah kembali. Baris kosong tidak menghapus nilai lama.
+// ==========================================================================
+const KODE_NILAI = /SIPL-NILAI\|([^|\s]+)\|(\d{4}-\d{2}-\d{2})/;
+const ImporNilaiPage = (() => {
+  const st = { jid: '', hari: [], file: '', plan: null, kirim: false, hasil: null, err: '' };
+  let el, muat = 0;
+  const myJ = () => S.boot.jadwal.filter(j => j.ID_Gadik === S.me.ID_Gadik && !j._pending)
+    .sort((a, b) => (b.Tanggal_Mulai || '').localeCompare(a.Tanggal_Mulai || '') || collator.compare(mapelName(a.ID_Mapel), mapelName(b.ID_Mapel)));
+  const J = () => S.boot.jadwal.find(j => j.ID_Jadwal === st.jid);
+  function maxTgl() { const t = todayStr(), b = addDays(t, 1), j = J(); return j && bolehIsiAwal(j, b) ? b : t; }
+  function labelJ(j) { return mapelName(j.ID_Mapel) + ' — ' + kelasName(j.ID_Kelas) + ' • ' + rentangJadwal(j); }
+  function tanggalList(j, tgl) { const t = tanggalJadwal(j); return t.length ? t : [tgl && isTgl(tgl) ? tgl : todayStr()]; }
+
+  async function harianDari(tgl) {
+    const c = (S.data.harian || {})[tgl];
+    if (c && harianValid(c)) return c;
+    const res = await api('nilaiHarian', { tanggal: tgl });
+    if (!res.success) return null;
+    S.data.harian = S.data.harian || {};
+    S.data.harian[tgl] = res.data; cachePut('harian:' + tgl, res.data);
+    return res.data;
+  }
+  /** Status & nilai tersimpan setiap hari pada jadwal terpilih. */
+  async function muatHari(tglAwal) {
+    const j = J(), my = ++muat;
+    if (!j) { st.hari = []; return render(); }
+    const mx = maxTgl();
+    st.hari = tanggalList(j, tglAwal).map((t, i, all) => ({ tgl: t, label: all.length > 1 ? 'HARI ' + (i + 1) : 'PENILAIAN HARIAN', tiba: t <= mx, d: null, siap: t > mx }));
+    render();
+    await Promise.all(st.hari.filter(h => h.tiba).map(async h => { h.d = await harianDari(h.tgl); h.siap = true; }));
+    if (my === muat) { if (st.plan && st.raw) periksa(); render(); }
+  }
+  const sesiH = h => (h.d && h.d.sesi && h.d.sesi[st.jid]) || null;
+  const nilaiH = h => (h.d && h.d.nilai && h.d.nilai[st.jid]) || {};
+  const kunci = h => { const s = sesiH(h); return !!(s && s.Status === 'Selesai'); };
+
+  function build(root) {
+    el = root;
+    el.innerHTML =
+      '<a href="#/nilai" class="btn ghost" style="margin:-6px 0 12px -10px">' + icon('arrow-left', 'sm') + 'Kembali ke Input Nilai Harian</a>' +
+      pageHead({
+        eyebrow: 'Import Excel // Penilaian Harian',
+        title: 'Import Nilai Harian',
+        desc: 'Unduh lembar penilaian harian (satu sheet per hari, format PROLAT A1–C2), isi skor <b>0–' + PENILAIAN.SKOR_MAX + '</b> di Excel, lalu unggah kembali. Nilai yang sudah tersimpan ikut tercantum di lembar; baris yang dikosongkan <b>tidak menghapus</b> nilai lama.',
+        chips: '<span class="chip">' + icon('file-sheet', 'sm') + '.xlsx</span><span class="chip line">Hanya sesi yang Anda ajar</span>'
+      }) +
+      '<div class="card pad imp-kelas" style="max-width:none"><div class="field"><label for="in-j">Mata pelajaran &amp; kelas</label><select id="in-j" class="select"></select></div><div id="in-hari" class="in-hari mt-16"></div></div>' +
+      '<div class="imp-steps">' +
+        '<div class="card imp-step"><div class="num-badge">01</div><div class="grow"><h3>Unduh lembar nilai</h3><p class="muted small">Satu sheet untuk setiap hari mapel ini, lengkap dengan nama peserta (urut abjad), kolom A1–C2, JUMLAH otomatis, dan kolom tanda tangan. Sel skor hanya menerima angka 0–' + PENILAIAN.SKOR_MAX + '.</p>' +
+          '<div class="imp-acts"><button type="button" class="btn primary" id="in-tpl">' + icon('download') + 'Unduh Template Nilai (Excel)</button></div></div></div>' +
+        '<div class="card imp-step"><div class="num-badge">02</div><div class="grow"><h3>Unggah lembar yang sudah diisi</h3>' +
+          '<label class="drop imp-drop" id="in-drop"><input type="file" id="in-file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>' +
+          '<span class="drop-ic">' + icon('upload') + '</span><b id="in-fname">Pilih berkas atau seret ke sini</b><small class="muted">Excel (.xlsx) dari template di samping</small></label></div></div>' +
+      '</div><div id="in-hasil" class="mt-24"></div>';
+    $('#in-j', el).onchange = e => { st.jid = e.target.value; st.plan = null; st.hasil = null; st.raw = null; history.replaceState(null, '', '#/impor-nilai/' + encodeURIComponent(st.jid)); muatHari(); };
+    $('#in-tpl', el).onclick = e => template(e.currentTarget);
+    const inp = $('#in-file', el), drop = $('#in-drop', el);
+    inp.onchange = () => { if (inp.files[0]) baca(inp.files[0]); inp.value = ''; };
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+    drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); const f = e.dataTransfer && e.dataTransfer.files[0]; if (f) baca(f); });
+    $('#in-hasil', el).addEventListener('click', e => {
+      if (e.target.closest('#in-simpan')) return simpan(e.target.closest('#in-simpan'));
+      if (e.target.closest('#in-batal')) { st.plan = null; st.raw = null; st.hasil = null; st.err = ''; $('#in-fname', el).textContent = 'Pilih berkas atau seret ke sini'; return render(); }
+    });
+    $('#in-hasil', el).addEventListener('change', e => { if (e.target.id === 'in-kirim') st.kirim = e.target.checked; });
+  }
+
+  function renderPilihan() {
+    const list = myJ(), sel = $('#in-j', el);
+    sel.innerHTML = list.length ? options(list, 'ID_Jadwal', labelJ, st.jid) : '<option value="">Belum ada jadwal mengajar</option>';
+    sel.disabled = !list.length;
+  }
+
+  function render() {
+    if (!el) return;
+    const j = J(), hh = $('#in-hari', el);
+    hh.innerHTML = !j ? '<p class="muted">Anda belum memiliki jadwal mengajar.</p>' : st.hari.map(h => {
+      const s = sesiH(h), n = Object.keys(nilaiH(h)).length;
+      const badge = !h.tiba ? '<span class="badge empty">Belum tiba</span>' : !h.siap ? '<span class="badge saving">Memuat…</span>' : kunci(h) ? '<span class="badge ok">Masuk rekap</span>' : n ? '<span class="badge draft">Draf • ' + n + '</span>' : '<span class="badge empty">Kosong</span>';
+      return '<div class="in-day"><b>' + esc(h.label) + '</b><small>' + esc(fmt.tgl(h.tgl, { hari: true, short: true })) + '</small>' + badge + '</div>';
+    }).join('');
+    const host = $('#in-hasil', el);
+    if (st.err) { host.innerHTML = '<div class="alert red">' + icon('alert-triangle') + '<div><b>Berkas tidak dapat diproses.</b> ' + esc(st.err) + '</div></div>'; return; }
+    if (st.hasil) return renderHasil(host);
+    if (!st.plan) { host.innerHTML = ''; return; }
+    const P = st.plan, simpanN = P.filter(p => p.aksi === 'simpan'), err = P.reduce((n, p) => n + p.errors.length, 0);
+    host.innerHTML = '<div class="card imp-preview"><div class="card-head"><div class="icon-tile">' + icon('clipboard-check') + '</div><div class="grow"><h3>Pratinjau &amp; Pemeriksaan</h3><div class="sub">' + esc(st.file) + ' → ' + esc(labelJ(j)) + '</div></div>' +
+        '<div class="imp-count"><span><b>' + P.length + '</b>lembar</span><span class="ok"><b>' + simpanN.length + '</b>siap disimpan</span><span><b>' + P.filter(p => p.aksi !== 'simpan').length + '</b>dilewati</span><span class="red"><b>' + err + '</b>perlu diperbaiki</span></div></div>' +
+      (err ? '<div class="alert red" style="margin:16px 24px 0">' + icon('alert-triangle') + '<div><b>' + err + ' isian perlu diperbaiki.</b> Perbaiki di Excel lalu unggah ulang — belum ada nilai yang disimpan.</div></div>' : '') +
+      '<div class="table-wrap"><table class="dt cards"><thead><tr><th>Lembar</th><th>Tanggal</th><th class="num">Terisi</th><th class="num">Lengkap 7 butir</th><th class="num">Berubah</th><th>Status</th></tr></thead><tbody>' +
+      P.map(p => '<tr' + (p.errors.length ? ' data-err="1"' : '') + '><td data-label="Lembar" class="card-title"><b>' + esc(p.label) + '</b>' + (p.sheet !== p.label ? '<div class="small muted">sheet ' + esc(p.sheet) + '</div>' : '') + '</td>' +
+        '<td data-label="Tanggal">' + esc(fmt.tgl(p.tgl, { hari: true, short: true })) + '</td><td data-label="Terisi" class="num mono">' + p.terisi + ' / ' + p.total + '</td><td data-label="Lengkap" class="num mono">' + p.lengkap + '</td><td data-label="Berubah" class="num mono">' + p.berubah + '</td>' +
+        '<td data-label="Status">' + (p.errors.length ? '<span class="badge bad">Perbaiki</span>' : p.aksi === 'simpan' ? '<span class="badge ok">Siap disimpan</span>' : '<span class="badge empty">Dilewati</span>') + (p.ket ? '<div class="small muted mt-8">' + esc(p.ket) + '</div>' : '') +
+          (p.errors.length ? '<ul class="in-err">' + p.errors.slice(0, 8).map(x => '<li>' + esc(x) + '</li>').join('') + (p.errors.length > 8 ? '<li>… dan ' + (p.errors.length - 8) + ' lainnya</li>' : '') + '</ul>' : '') + '</td></tr>').join('') +
+      '</tbody></table></div>' +
+      '<div class="sticky-bar imp-bar"><label class="check grow"><input type="checkbox" id="in-kirim"' + (st.kirim ? ' checked' : '') + (simpanN.length ? '' : ' disabled') + '><span><b>Sekaligus kirim ke rekap</b> <span class="small muted">— hari yang diimpor langsung dikunci (seperti menekan “Selesai &amp; Kirim ke Rekap”)</span></span></label>' +
+        '<button type="button" class="btn outline" id="in-batal">Batal</button><button type="button" class="btn primary" id="in-simpan"' + (err || !simpanN.length ? ' disabled' : '') + '>' + icon('save') + 'Simpan ' + simpanN.length + ' Hari</button></div></div>';
+  }
+
+  async function template(btn) {
+    const j = J();
+    if (!j) return toast('Belum ada jadwal', 'Pilih mata pelajaran yang Anda ajar.', 'warning');
+    if (st.hari.some(h => h.tiba && !h.siap)) return toast('Sebentar…', 'Nilai tersimpan sedang dimuat. Coba lagi sesaat lagi.', 'info');
+    const ps = urutNama(S.boot.peserta.filter(p => p.ID_Kelas === j.ID_Kelas));
+    const data = {
+      instansi: String(CFG.INSTANSI || 'SPN Polda Papua Barat').toUpperCase(), format: PENILAIAN,
+      hari: st.hari.map(h => ({
+        label: h.label, terkunci: kunci(h),
+        info: [['Kelas', kelasName(j.ID_Kelas, true)], ['Mata Pelajaran', mapelName(j.ID_Mapel)], ['Hari / Tanggal', tglPanjang(h.tgl, true) + (h.label.indexOf('HARI') === 0 ? ' (' + h.label + ')' : '') + ' • ' + fmt.jam(j.Jam_Mulai) + '–' + fmt.jam(j.Jam_Selesai) + ' WIT'],
+          ['Gadik', gadikName(j.ID_Gadik)], ['Kode impor', 'SIPL-NILAI|' + j.ID_Jadwal + '|' + h.tgl + '  (jangan diubah)']],
+        peserta: ps.map(p => ({ nama: p.Nama_Lengkap, pn: pangkatNrp(p) })),
+        nilai: ps.map(p => { const x = nilaiH(h)[p.ID_Peserta]; return x ? x[0] : KOSONG(); }),
+        ttd: ttdGadik(j.ID_Gadik, h.tgl)
+      })),
+      petunjuk: ['Setiap sheet HARI adalah satu hari penilaian. Isi skor butir A1–C2 dengan angka 0–' + PENILAIAN.SKOR_MAX + ' (desimal boleh, mis. 7,5). Kolom JUMLAH terhitung otomatis.',
+        'Jangan mengubah nama, kolom PANGKAT / NRP, judul kolom, maupun baris "Kode impor" — aplikasi memakainya untuk mencocokkan peserta dan tanggal.',
+        'Nilai yang sudah tersimpan di aplikasi sudah tercantum. Baris yang dikosongkan tidak menghapus nilai lama; butir yang kosong pada baris yang terisi dihitung 0.',
+        'Lembar yang sudah dikirim ke rekap (terkunci) dan tanggal yang belum tiba akan dilewati saat import.',
+        'Simpan sebagai .xlsx, lalu unggah di menu Input Nilai Harian → Import Excel. Periksa pratinjau, kemudian tekan Simpan. Setelah itu tekan "Selesai & Kirim ke Rekap" (atau centang "Sekaligus kirim ke rekap" saat import).']
+    };
+    unduhBerkas('nilaiTemplateXlsx', data, namaBerkas(['Nilai-Harian', kelasName(j.ID_Kelas), mapelName(j.ID_Mapel), j.Tanggal_Mulai || todayStr()], 'xlsx'), btn);
+  }
+
+  async function baca(file) {
+    st.file = file.name; st.hasil = null; st.err = ''; st.plan = null;
+    $('#in-fname', el).textContent = file.name;
+    $('#in-hasil', el).innerHTML = '<div class="card pad"><p class="hp-load"><span class="spin"></span>Membaca ' + esc(file.name) + '…</p></div>';
+    try {
+      if (file.size > 8 * 1024 * 1024) throw new Error('Berkas terlalu besar (maks. 8 MB).');
+      await muatEkspor();
+      const sheets = await window.Ekspor.bacaBerkasSemua(file);
+      const raw = [];
+      sheets.forEach(sh => {
+        let kode = null;
+        for (let r = 0; r < Math.min(sh.rows.length, 20) && !kode; r++) (sh.rows[r] || []).forEach(c => { const m = KODE_NILAI.exec(String(c == null ? '' : c)); if (m && !kode) kode = m; });
+        if (kode) raw.push({ sheet: sh.name, jid: kode[1], tgl: kode[2], rows: sh.rows });
+      });
+      if (!raw.length) throw new Error('Tidak ada lembar nilai SIPL di berkas ini (baris "Kode impor" tidak ditemukan). Gunakan tombol "Unduh Template Nilai" di halaman ini.');
+      const jids = Array.from(new Set(raw.map(x => x.jid)));
+      if (jids.length > 1) throw new Error('Berkas berisi lembar dari ' + jids.length + ' mata pelajaran berbeda. Satu berkas untuk satu mata pelajaran.');
+      if (jids[0] !== st.jid) {
+        const ok = myJ().find(x => x.ID_Jadwal === jids[0]);
+        if (!ok) throw new Error('Lembar ini untuk sesi jadwal yang bukan milik Anda atau sudah dihapus.');
+        st.jid = jids[0]; renderPilihan(); history.replaceState(null, '', '#/impor-nilai/' + encodeURIComponent(st.jid));
+        toast('Mata pelajaran disesuaikan', labelJ(ok), 'info');
+        st.raw = raw; st.plan = [];
+        await muatHari();
+        return;
+      }
+      st.raw = raw; st.plan = [];
+      if (st.hari.some(h => h.tiba && !h.siap)) await muatHari(); else periksa();
+      render();
+    } catch (e) { st.plan = null; st.err = e && e.message ? e.message : 'Berkas tidak dapat dibaca.'; render(); }
+  }
+
+  /** Baca satu lembar → baris nilai per peserta. */
+  function bacaLembar(rows) {
+    let h2 = -1;
+    for (let r = 0; r < Math.min(rows.length, 40); r++) { const row = rows[r] || []; if (BUTIR.every(b => row.some(c => String(c).trim().toUpperCase() === b))) { h2 = r; break; } }
+    if (h2 < 0) return { error: 'Judul kolom A1–C2 tidak ditemukan.' };
+    const cols = BUTIR.map(b => (rows[h2] || []).findIndex(c => String(c).trim().toUpperCase() === b));
+    const h1 = rows[h2 - 1] || [];
+    let cN = h1.findIndex(c => /^NAMA/i.test(String(c).trim())), cP = h1.findIndex(c => /NRP/i.test(String(c)));
+    if (cN < 0) cN = 1; if (cP < 0) cP = 2;
+    const out = [];
+    for (let r = h2 + 1; r < rows.length; r++) {
+      const row = rows[r] || [], no = row[0];
+      if (!(typeof no === 'number' || /^\d+$/.test(String(no || '').trim()))) continue;
+      out.push({ baris: r + 1, nama: String(row[cN] == null ? '' : row[cN]).trim(), pn: row[cP], v: cols.map(c => (c < 0 ? '' : row[c])) });
+    }
+    return { rows: out };
+  }
+
+  function periksa() {
+    const j = J();
+    if (!j || !st.raw) return;
+    const ps = S.boot.peserta.filter(p => p.ID_Kelas === j.ID_Kelas), byNrp = {}, byNama = {};
+    ps.forEach(p => { byNrp[String(p.NRP).toUpperCase()] = p; byNama[kunciTeks(p.Nama_Lengkap)] = p; });
+    const mx = maxTgl(), seen = {};
+    st.plan = st.raw.map(x => {
+      const h = st.hari.find(y => y.tgl === x.tgl), p = { sheet: x.sheet, tgl: x.tgl, label: h ? h.label : x.tgl, errors: [], items: [], terisi: 0, lengkap: 0, berubah: 0, total: ps.length, aksi: 'lewati', ket: '' };
+      if (seen[x.tgl]) { p.errors.push('Tanggal ' + x.tgl + ' muncul di dua lembar (' + seen[x.tgl] + ' dan ' + x.sheet + ').'); return p; }
+      seen[x.tgl] = x.sheet;
+      if (!h) { p.errors.push('Tanggal ' + x.tgl + ' bukan hari pelaksanaan mapel ini.'); return p; }
+      const L = bacaLembar(x.rows);
+      if (L.error) { p.errors.push(L.error); return p; }
+      const ada = nilaiH(h), pakai = {};
+      L.rows.forEach(rw => {
+        const isi = rw.v.map(c => (c === null || c === undefined ? '' : String(c).trim()));
+        if (isi.every(c => c === '')) return;
+        const nrp = (typeof rw.pn === 'number' ? teksSel(rw.pn, 'nrp') : String(rw.pn || '').split('/').pop().replace(/^NRP\s*/i, '').trim()).toUpperCase();
+        const ps1 = byNrp[nrp] || byNama[kunciTeks(rw.nama)];
+        if (!ps1) { p.errors.push('Baris ' + rw.baris + ': "' + (rw.nama || nrp) + '" tidak terdaftar di kelas ini.'); return; }
+        if (pakai[ps1.ID_Peserta]) { p.errors.push('Baris ' + rw.baris + ': ' + ps1.Nama_Lengkap + ' tercantum dua kali.'); return; }
+        pakai[ps1.ID_Peserta] = 1;
+        const v = isi.map((c, bi) => {
+          if (c === '') return '';
+          const n = Number(c.replace(',', '.'));
+          if (!isFinite(n) || n < 0 || n > PENILAIAN.SKOR_MAX) { p.errors.push('Baris ' + rw.baris + ' (' + ps1.Nama_Lengkap + '), ' + BUTIR[bi] + ': "' + c + '" harus angka 0–' + PENILAIAN.SKOR_MAX + '.'); return ''; }
+          return Math.round(n * 100) / 100;
+        });
+        p.terisi++;
+        if (terisi(v) === BUTIR.length) p.lengkap++;
+        const lama = ada[ps1.ID_Peserta] ? ada[ps1.ID_Peserta][0] : KOSONG();
+        if (v.some((x, i) => String(x) !== String(lama[i] === '' || lama[i] == null ? '' : Number(lama[i])))) p.berubah++;
+        p.items.push({ id: ps1.ID_Peserta, v });
+      });
+      if (!h.tiba) { if (p.terisi) p.errors.push('Tanggal ' + fmt.tgl(x.tgl) + ' belum tiba — kosongkan lembar ini atau import lagi pada harinya.'); else p.ket = 'Tanggal belum tiba.'; return p; }
+      if (kunci(h)) { p.ket = p.berubah ? 'Sudah masuk rekap (terkunci) — perubahan di lembar ini diabaikan.' : 'Sudah masuk rekap (terkunci).'; return p; }
+      if (!p.terisi) { p.ket = 'Lembar kosong.'; return p; }
+      if (!p.berubah) { p.ket = 'Tidak ada perubahan.'; return p; }
+      if (!p.errors.length) { p.aksi = 'simpan'; p.ket = p.berubah + ' peserta berubah' + (p.terisi - p.lengkap ? ' • ' + (p.terisi - p.lengkap) + ' belum lengkap 7 butir (butir kosong dihitung 0)' : ''); }
+      return p;
+    }).sort((a, b) => a.tgl.localeCompare(b.tgl));
+  }
+
+  async function simpan(btn) {
+    const j = J(), kirim = st.plan.filter(p => p.aksi === 'simpan');
+    if (!kirim.length) return;
+    const ok = await confirmBox({ title: 'Simpan nilai ' + kirim.length + ' hari?', icon: 'save', okText: st.kirim ? 'Simpan & kirim ke rekap' : 'Simpan sebagai draf',
+      html: kirim.map(p => '<b>' + esc(p.label) + '</b> — ' + esc(fmt.tgl(p.tgl, { hari: true })) + ': ' + p.terisi + ' peserta').join('<br>') + '<br><br>' + (st.kirim ? 'Hari-hari ini <b>langsung dikirim ke rekap dan dikunci</b>.' : 'Nilai tersimpan sebagai <b>draf</b>. Kirim ke rekap dari halaman Input Nilai Harian setelah diperiksa.') });
+    if (!ok) return;
+    const done = busy(btn, 'Menyimpan…');
+    const res = await api('nilaiImport', { idJadwal: st.jid, kirim: st.kirim, hari: kirim.map(p => ({ tanggal: p.tgl, label: p.label, items: p.items })) }, { tries: 1 });
+    done();
+    if (!res.success) {
+      ((res.data && res.data.errors) || []).forEach(x => { const p = st.plan.find(q => q.tgl === x.tanggal); if (p) { p.errors.push(x.message); p.aksi = 'lewati'; } });
+      render();
+      return toast('Import nilai belum berhasil', res.message || 'Coba lagi.', 'error');
+    }
+    res.data.hasil.forEach(h => { if (S.data.harian) delete S.data.harian[h.tanggal]; if (h.sesi) sesiStatUpdate(h.sesi); });
+    cacheDrop(['harian:'].concat(res.data.kirim ? ['rekap:', 'juara'] : []));
+    if (res.data.kirim) S.data.rekap = {};
+    st.hasil = res.data;
+    toast('Nilai berhasil diimpor', res.data.hasil.length + ' hari • ' + res.data.hasil.reduce((n, h) => n + h.saved, 0) + ' baris nilai' + (res.data.kirim ? ' • dikirim ke rekap' : ' • draf'), 'success');
+    render();
+    muatHari();
+  }
+
+  function renderHasil(host) {
+    const h = st.hasil, first = h.hasil[0];
+    host.innerHTML = '<div class="card pad imp-done"><div class="imp-done-ic">' + icon('check-circle') + '</div><div class="grow"><h3>Import nilai selesai</h3>' +
+      '<p class="muted">' + h.hasil.map(x => '<b>' + esc(fmt.tgl(x.tanggal, { hari: true, short: true })) + '</b>: ' + x.saved + ' peserta').join(' • ') + '</p>' +
+      '<p class="muted mt-8">' + (h.kirim ? 'Hari-hari tersebut sudah <b>masuk rekap</b> dan terkunci.' : 'Tersimpan sebagai <b>draf</b>. Buka Input Nilai Harian untuk memeriksa lalu tekan <b>Selesai &amp; Kirim ke Rekap</b>.') + '</p>' +
+      '<div class="imp-acts mt-16">' + (first ? '<a class="btn primary" href="' + nilaiHref(first.tanggal, st.jid) + '">' + icon('arrow-right') + 'Buka Input Nilai Harian</a>' : '') +
+      '<button type="button" class="btn ghost" id="in-batal">Import berkas lain</button></div></div></div>';
+  }
+
+  return {
+    title: 'Import Nilai Harian', roles: ['Gadik'],
+    show(root, param) {
+      if (!el || el !== root) build(root);
+      const [jid, tgl] = String(param || '').split('/');
+      const list = myJ();
+      const pilih = list.find(j => j.ID_Jadwal === jid) || list.find(j => j.ID_Jadwal === st.jid) || list.find(j => tgl && jadwalAktif(j, tgl)) || list.find(j => jadwalAktif(j, todayStr())) || list[0];
+      const ganti = !pilih || pilih.ID_Jadwal !== st.jid;
+      st.jid = pilih ? pilih.ID_Jadwal : '';
+      renderPilihan();
+      if (ganti) { st.plan = null; st.raw = null; st.hasil = null; st.err = ''; }
+      muatHari(tgl);
+    },
+    onBoot() { if (el) { renderPilihan(); render(); } }
+  };
+})();
+page('impor-nilai', ImporNilaiPage);
